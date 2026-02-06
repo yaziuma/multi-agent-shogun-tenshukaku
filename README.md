@@ -14,13 +14,13 @@ Tenshukaku provides a browser-based interface for commanding and monitoring a fl
 
 ### Command Tab (指揮)
 
-Send messages directly to the Shogun agent's tmux pane. Supports Ctrl+Enter for quick submission and an Escape key button to interrupt Claude Code when needed.
+Send messages directly to the Shogun agent's tmux pane. Supports Ctrl+Enter for quick submission and an Escape key button to interrupt Claude Code when needed. Pane output updates every second in real time.
 
 ![Command Tab](assets/screenshots/tab-command.png)
 
 ### Monitor Tab (監視)
 
-Real-time view of all agent panes (Karo, Karo Standby, Ashigaru 1-3, Denrei 1-2) in a grid layout. Output updates every 3 seconds to balance responsiveness with resource usage.
+Real-time grid view of all agent panes. Update interval is configurable (default: 5 seconds).
 
 ![Monitor Tab](assets/screenshots/tab-monitor.png)
 
@@ -105,6 +105,9 @@ tmux:
   shogun_session: "shogun"          # Shogun tmux session name
   multiagent_session: "multiagent"  # Multi-agent tmux session name
   shogun_pane: "0.0"                # Shogun pane index
+
+monitor:
+  update_interval_ms: 5000  # Monitor tab update interval (ms)
 ```
 
 ### Running
@@ -135,7 +138,7 @@ multi-agent-shogun-tenshukaku/
 ├── static/
 │   └── style.css            # Sengoku-era themed CSS
 ├── config/
-│   └── settings.yaml        # Server, bakuhu path & tmux configuration
+│   └── settings.yaml        # Server, bakuhu path, tmux & monitor configuration
 ├── tests/
 │   ├── test_api.py          # API endpoint tests
 │   ├── test_tmux_bridge.py  # TmuxBridge unit tests

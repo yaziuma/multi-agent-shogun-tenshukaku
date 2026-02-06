@@ -14,13 +14,13 @@
 
 ### 指揮タブ
 
-将軍エージェントのtmuxペインに直接メッセージを送信する。Ctrl+Enterによるクイック送信と、Claude Codeの割り込みに使うEscapeキー送信ボタンを備える。
+将軍エージェントのtmuxペインに直接メッセージを送信する。Ctrl+Enterによるクイック送信と、Claude Codeの割り込みに使うEscapeキー送信ボタンを備える。ペイン出力は1秒間隔でリアルタイム更新。
 
 ![指揮タブ](assets/screenshots/tab-command.png)
 
 ### 監視タブ
 
-全エージェントペイン（家老、控え家老、足軽1-3、伝令1-2）をグリッドレイアウトでリアルタイム表示。負荷軽減のため3秒間隔で更新。
+全エージェントペインをグリッドレイアウトでリアルタイム表示。更新間隔は設定可能（デフォルト5秒）。
 
 ![監視タブ](assets/screenshots/tab-monitor.png)
 
@@ -105,6 +105,9 @@ tmux:
   shogun_session: "shogun"          # 将軍tmuxセッション名
   multiagent_session: "multiagent"  # マルチエージェントtmuxセッション名
   shogun_pane: "0.0"                # 将軍ペインインデックス
+
+monitor:
+  update_interval_ms: 5000  # 監視タブの更新間隔（ミリ秒）
 ```
 
 ### 起動
@@ -135,7 +138,7 @@ multi-agent-shogun-tenshukaku/
 ├── static/
 │   └── style.css            # 戦国テーマCSS
 ├── config/
-│   └── settings.yaml        # サーバー・bakuhuパス・tmux設定
+│   └── settings.yaml        # サーバー・bakuhuパス・tmux・監視設定
 ├── tests/
 │   ├── test_api.py          # APIエンドポイントテスト
 │   ├── test_tmux_bridge.py  # TmuxBridgeユニットテスト

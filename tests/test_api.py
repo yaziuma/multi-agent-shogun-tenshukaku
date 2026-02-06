@@ -55,6 +55,29 @@ class TestTopPage:
         response = client.get("/")
         assert b"<!DOCTYPE html>" in response.content or b"<html" in response.content
 
+    def test_index_with_custom_monitor_interval(self, client):
+        """カスタム monitor_interval が HTML に反映される"""
+        with patch("main.load_settings") as mock_load:
+            mock_load.return_value = {
+                "monitor": {"update_interval_ms": 7000},
+                "server": {"host": "0.0.0.0", "port": 30000},
+            }
+            response = client.get("/")
+            assert response.status_code == 200
+            # テンプレート変数が展開されて7000が含まれるか確認
+            assert b"7000" in response.content
+
+    def test_index_with_default_monitor_interval(self, client):
+        """monitor セクションがない場合デフォルト値5000が使用される"""
+        with patch("main.load_settings") as mock_load:
+            mock_load.return_value = {
+                "server": {"host": "0.0.0.0", "port": 30000},
+            }
+            response = client.get("/")
+            assert response.status_code == 200
+            # デフォルト値5000が含まれるか確認
+            assert b"5000" in response.content
+
 
 class TestDashboardAPI:
     """GET /api/dashboard のテスト"""

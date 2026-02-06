@@ -23,9 +23,15 @@ async def index(request: Request):
         commands.reverse()
     except Exception:
         commands = []
+
+    # Load monitor interval from settings (default: 5000ms)
+    settings = load_settings()
+    monitor_interval = settings.get("monitor", {}).get("update_interval_ms", 5000)
+
     return templates.TemplateResponse("index.html", {
         "request": request,
-        "commands": commands
+        "commands": commands,
+        "monitor_interval": monitor_interval
     })
 
 
