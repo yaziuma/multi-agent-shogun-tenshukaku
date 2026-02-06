@@ -33,10 +33,10 @@ async def get_dashboard():
 @app.post("/api/command")
 async def send_command(instruction: str = Form(...)):
     """
-    Send command to karo via queue/shogun_to_karo.yaml.
+    Send command to shogun via queue/shogun_to_karo.yaml.
 
     Args:
-        instruction: Command string to send to karo
+        instruction: Command string to send to shogun
 
     Returns:
         Status of command submission
@@ -44,7 +44,7 @@ async def send_command(instruction: str = Form(...)):
     try:
         bridge = TmuxBridge()
         cmd_id = bridge.add_command(instruction)
-        bridge.send_to_karo(
+        bridge.send_to_shogun(
             f"queue/shogun_to_karo.yaml に新しい指示がある。{cmd_id} を確認して実行せよ。"
         )
         return {"status": "sent", "cmd_id": cmd_id}
