@@ -1,6 +1,8 @@
 # multi-agent-shogun-tenshukaku
 
-Web-based control panel for the [multi-agent-bakuhu](https://github.com/yaziuma/multi-agent-bakuhu) multi-agent orchestration system. Named after the castle keep (天守閣) — the commander's vantage point overlooking the entire battlefield.
+> This project is a web control panel originally built for [yohey-w/multi-agent-shogun](https://github.com/yohey-w/multi-agent-shogun) and its forks. Compatible with any multi-agent-shogun family system via `config/settings.yaml`.
+
+Web-based control panel for multi-agent-shogun orchestration systems. Named after the castle keep (天守閣) — the commander's vantage point overlooking the entire battlefield.
 
 ![Command Tab](assets/screenshots/tab-command.png)
 
