@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse
 import uvicorn
 import yaml
 from pathlib import Path
-from ws.handlers import WebSocketHandler
+from ws.handlers import WebSocketHandler, MonitorWebSocketHandler
 from ws.tmux_bridge import TmuxBridge
 
 app = FastAPI(title="Shogun Web Panel")
@@ -16,7 +16,16 @@ templates = Jinja2Templates(directory="templates")
 @app.get("/", response_class=HTMLResponse)
 async def index(request: Request):
     """Render main dashboard page."""
-    return templates.TemplateResponse("index.html", {"request": request})
+    try:
+        bridge = TmuxBridge()
+        commands = bridge.read_command_history()
+        commands.reverse()
+    except Exception:
+        commands = []
+    return templates.TemplateResponse("index.html", {
+        "request": request,
+        "commands": commands
+    })
 
 
 @app.get("/api/dashboard", response_class=HTMLResponse)
@@ -33,7 +42,7 @@ async def get_dashboard():
 @app.post("/api/command")
 async def send_command(instruction: str = Form(...)):
     """
-    Send command to shogun via queue/shogun_to_karo.yaml.
+    Send command directly to shogun pane via tmux send-keys.
 
     Args:
         instruction: Command string to send to shogun
@@ -43,11 +52,11 @@ async def send_command(instruction: str = Form(...)):
     """
     try:
         bridge = TmuxBridge()
-        cmd_id = bridge.add_command(instruction)
-        bridge.send_to_shogun(
-            f"queue/shogun_to_karo.yaml に新しい指示がある。{cmd_id} を確認して実行せよ。"
-        )
-        return {"status": "sent", "cmd_id": cmd_id}
+        success = bridge.send_to_shogun(instruction)
+        if success:
+            return {"status": "sent"}
+        else:
+            return {"status": "error", "message": "Failed to send to shogun pane"}
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -71,6 +80,13 @@ async def get_history(request: Request):
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time tmux output updates."""
     handler = WebSocketHandler(websocket)
+    await handler.handle()
+
+
+@app.websocket("/ws/monitor")
+async def monitor_websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for monitoring all multiagent panes."""
+    handler = MonitorWebSocketHandler(websocket)
     await handler.handle()
 
 

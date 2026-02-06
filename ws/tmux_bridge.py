@@ -6,6 +6,7 @@ allowing remote control and monitoring of the multi-agent system.
 """
 
 import libtmux
+import subprocess
 from pathlib import Path
 import yaml
 from datetime import datetime
@@ -24,9 +25,9 @@ class TmuxBridge:
             settings = yaml.safe_load(f)
         self.bakuhu_base = Path(settings["bakuhu"]["base_path"])
 
-    def capture_karo_pane(self, lines: int = 50) -> str:
+    def capture_shogun_pane(self, lines: int = 50) -> str:
         """
-        Capture output from the karo pane (multiagent:0.0).
+        Capture output from the shogun pane (shogun:0.0).
 
         Args:
             lines: Number of lines to capture (default: 50)
@@ -34,14 +35,63 @@ class TmuxBridge:
         Returns:
             Captured pane output as string, or error message if pane not found
         """
-        if not self.session:
-            return "Error: multiagent session not found"
-        pane = self.session.panes.get(pane_index="0", default=None)
+        shogun_session = self.server.sessions.get(
+            session_name="shogun", default=None
+        )
+        if not shogun_session:
+            return "Error: shogun session not found"
+        try:
+            pane = shogun_session.panes.get(pane_index="0")
+        except Exception:
+            pane = None
         if pane:
             captured = pane.capture_pane()
-            # Return last N lines
             return "\n".join(captured[-lines:])
-        return "Error: karo pane not found"
+        return "Error: shogun pane not found"
+
+    def capture_all_panes(self, lines: int = 20) -> list[dict]:
+        """
+        Capture output from all panes in the multiagent session.
+
+        Args:
+            lines: Number of lines to capture from each pane (default: 20)
+
+        Returns:
+            List of dictionaries with agent_id, pane_index, and output
+            Example: [{"agent_id": "karo", "pane_index": 0, "output": "..."}]
+        """
+        if not self.session:
+            return []
+
+        result = []
+        for pane in self.session.panes:
+            # Get pane index
+            pane_index = int(pane.pane_index)
+
+            # Try to get @agent_id from tmux user option
+            try:
+                agent_id = pane.show_option("@agent_id")
+            except Exception:
+                agent_id = None
+
+            # Fallback to pane_index if @agent_id is not set
+            if not agent_id:
+                agent_id = f"pane_{pane_index}"
+
+            # Capture pane output
+            try:
+                captured = pane.capture_pane()
+                output = "\n".join(captured[-lines:])
+            except Exception:
+                output = "Error: failed to capture pane"
+
+            result.append({
+                "agent_id": agent_id,
+                "pane_index": pane_index,
+                "output": output
+            })
+
+        return result
 
     def send_to_karo(self, message: str) -> bool:
         """
@@ -55,32 +105,33 @@ class TmuxBridge:
         """
         if not self.session:
             return False
-        pane = self.session.panes.get(pane_index="0", default=None)
+        try:
+            pane = self.session.panes.get(pane_index="0")
+        except Exception:
+            pane = None
         if pane:
-            pane.send_keys(message)
+            import time
+            pane.send_keys(message, enter=False)
+            time.sleep(0.1)
+            pane.send_keys("", enter=True)
             return True
         return False
 
     def send_to_shogun(self, message: str) -> bool:
-        """
-        Send a message to the shogun pane (shogun:0.0).
-
-        Args:
-            message: Message to send to shogun
-
-        Returns:
-            True if successful, False otherwise
-        """
-        shogun_session = self.server.sessions.get(
-            session_name="shogun", default=None
-        )
-        if not shogun_session:
-            return False
-        pane = shogun_session.panes.get(pane_index="0", default=None)
-        if pane:
-            pane.send_keys(message)
+        """Send a message to the shogun pane (shogun:0.0)."""
+        target = "shogun:0.0"
+        try:
+            subprocess.run(
+                ["tmux", "send-keys", "-t", target, message],
+                check=True,
+            )
+            subprocess.run(
+                ["tmux", "send-keys", "-t", target, "Enter"],
+                check=True,
+            )
             return True
-        return False
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
 
     def read_dashboard(self) -> str:
         """

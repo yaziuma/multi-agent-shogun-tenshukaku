@@ -28,7 +28,6 @@ def mock_bridge():
                 "instruction": "test command 2",
             },
         ]
-        instance.add_command.return_value = "cmd_003"
         instance.send_to_shogun.return_value = True
         yield instance
 
@@ -91,29 +90,29 @@ class TestCommandAPI:
         response = client.post("/api/command", data={"instruction": "test"})
         assert response.status_code == 200
 
-    def test_command_calls_add_command(self, client, mock_bridge):
-        """add_command() が呼ばれる"""
-        response = client.post("/api/command", data={"instruction": "deploy system"})
-        mock_bridge.add_command.assert_called_once_with("deploy system")
-
     def test_command_calls_send_to_shogun(self, client, mock_bridge):
-        """send_to_shogun() が呼ばれる"""
-        response = client.post("/api/command", data={"instruction": "test"})
-        mock_bridge.send_to_shogun.assert_called_once()
-        # 呼び出し引数に cmd_id が含まれているか確認
-        call_args = mock_bridge.send_to_shogun.call_args[0][0]
-        assert "cmd_003" in call_args
+        """send_to_shogun() が instruction をそのまま渡して呼ばれる"""
+        response = client.post("/api/command", data={"instruction": "deploy system"})
+        mock_bridge.send_to_shogun.assert_called_once_with("deploy system")
 
-    def test_command_returns_cmd_id(self, client, mock_bridge):
-        """レスポンスに cmd_id が含まれる"""
+    def test_command_returns_sent_status(self, client, mock_bridge):
+        """レスポンスに status: sent が含まれる（cmd_idは含まれない）"""
         response = client.post("/api/command", data={"instruction": "test"})
         data = response.json()
         assert data["status"] == "sent"
-        assert data["cmd_id"] == "cmd_003"
+        assert "cmd_id" not in data
 
-    def test_command_with_error(self, client, mock_bridge):
-        """add_command() がエラーを起こした場合"""
-        mock_bridge.add_command.side_effect = Exception("Command add error")
+    def test_command_with_send_failure(self, client, mock_bridge):
+        """send_to_shogun() が False を返した場合"""
+        mock_bridge.send_to_shogun.return_value = False
+        response = client.post("/api/command", data={"instruction": "test"})
+        data = response.json()
+        assert data["status"] == "error"
+        assert "message" in data
+
+    def test_command_with_exception(self, client, mock_bridge):
+        """send_to_shogun() が例外を起こした場合"""
+        mock_bridge.send_to_shogun.side_effect = Exception("Send error")
         response = client.post("/api/command", data={"instruction": "test"})
         data = response.json()
         assert data["status"] == "error"
