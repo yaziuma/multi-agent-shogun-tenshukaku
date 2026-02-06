@@ -5,7 +5,6 @@ This module provides integration between the web interface and tmux sessions,
 allowing remote control and monitoring of the multi-agent system.
 """
 
-import os
 import libtmux
 from pathlib import Path
 import yaml
@@ -20,10 +19,10 @@ class TmuxBridge:
         """Initialize the tmux bridge and connect to the multiagent session."""
         self.server = libtmux.Server()
         self.session = self.server.sessions.get(session_name="multiagent", default=None)
-        self.bakuhu_base = Path(os.environ.get(
-            "BAKUHU_BASE",
-            "/home/quieter/projects/multi-agent-bakuhu"
-        ))
+        settings_path = Path(__file__).parent.parent / "config" / "settings.yaml"
+        with open(settings_path) as f:
+            settings = yaml.safe_load(f)
+        self.bakuhu_base = Path(settings["bakuhu"]["base_path"])
 
     def capture_karo_pane(self, lines: int = 50) -> str:
         """
