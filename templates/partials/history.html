@@ -1,13 +1,18 @@
-<div class="history-list" hx-get="/api/history" hx-trigger="load, every 10s" hx-swap="innerHTML">
-    {% for cmd in commands %}
+<div class="history-controls">
+    <button type="button" class="btn-toggle-all" data-action="open-all" hx-disable>全て開く</button>
+    <button type="button" class="btn-toggle-all" data-action="close-all" hx-disable>全て閉じる</button>
+    <button type="button" class="btn-refresh" onclick="document.body.dispatchEvent(new Event('refresh-history'))" hx-disable>🔄 更新</button>
+</div>
+<div class="history-list" hx-get="/api/history" hx-trigger="refresh-history from:body" hx-target=".history-list" hx-select=".history-list" hx-swap="outerHTML">
+    {% for cmd in commands|default([]) %}
     <div class="history-item {% if cmd.status == 'done' %}done{% else %}pending{% endif %}">
         <span class="cmd-id">{{ cmd.cmd_id }}</span>
         <span class="status">{{ cmd.status }}</span>
         <span class="timestamp">{{ cmd.timestamp }}</span>
-        <details>
-            <summary>指示内容</summary>
+        <button type="button" class="toggle-btn" hx-disable>▶ 表示</button>
+        <div class="instruction-content" style="display:none">
             <pre>{{ cmd.instruction }}</pre>
-        </details>
+        </div>
     </div>
     {% endfor %}
 </div>

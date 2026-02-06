@@ -4,29 +4,41 @@
 <div class="container">
     <!-- タブナビゲーション -->
     <nav class="tab-nav">
-        <button class="tab-btn active" data-tab="command">指揮</button>
-        <button class="tab-btn" data-tab="dashboard">戦況</button>
-        <button class="tab-btn" data-tab="history">履歴</button>
+        <button type="button" class="tab-btn active" data-tab="command" hx-disable>指揮</button>
+        <button type="button" class="tab-btn" data-tab="monitor" hx-disable>監視</button>
+        <button type="button" class="tab-btn" data-tab="dashboard" hx-disable>戦況</button>
+        <button type="button" class="tab-btn" data-tab="history" hx-disable>履歴</button>
     </nav>
 
     <!-- タブ1: 指揮 -->
     <div class="tab-content active" id="tab-command">
         <section class="command-input">
-            <h2>📝 指示入力</h2>
-            <form hx-post="/api/command" hx-target="#command-result" hx-swap="innerHTML">
-                <textarea name="instruction" rows="5" placeholder="家老への指示を入力..."></textarea>
+            <h2>💬 将軍との会話</h2>
+            <form hx-post="/api/command" hx-target="#command-result" hx-swap="innerHTML"
+                  hx-on::after-request="if(event.detail.successful) this.reset()">
+                <textarea name="instruction" rows="5" placeholder="将軍に話しかける..."></textarea>
                 <button type="submit">送信</button>
             </form>
             <div id="command-result"></div>
         </section>
 
-        <section class="realtime-output" hx-ext="ws" ws-connect="/ws">
-            <h2>🔄 家老ペイン出力</h2>
-            <div id="karo-output" class="terminal"></div>
+        <section class="realtime-output">
+            <h2>🔄 リアルタイム出力</h2>
+            <p class="description">将軍ペイン（tmux）の出力をリアルタイム表示</p>
+            <div id="shogun-output" class="terminal"><pre>接続中...</pre></div>
         </section>
     </div>
 
-    <!-- タブ2: 戦況 -->
+    <!-- タブ2: 監視 -->
+    <div id="tab-monitor" class="tab-content">
+        <h2>全ペイン監視</h2>
+        <div id="monitor-grid" class="monitor-grid">
+            <!-- WebSocketで動的に生成 -->
+            <div class="monitor-loading">接続中...</div>
+        </div>
+    </div>
+
+    <!-- タブ3: 戦況 -->
     <div class="tab-content" id="tab-dashboard">
         <section class="dashboard">
             <h2>📊 ダッシュボード</h2>
@@ -47,12 +59,91 @@
 
 <script>
 document.querySelectorAll('.tab-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
         document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
         btn.classList.add('active');
         document.getElementById('tab-' + btn.dataset.tab).classList.add('active');
+        // 履歴タブ: 自動更新しない（手動の「🔄 更新」ボタンで更新）
     });
 });
+
+// Ctrl+Enter で送信
+document.querySelector('textarea[name="instruction"]').addEventListener('keydown', (e) => {
+    if (e.ctrlKey && e.key === 'Enter') {
+        e.preventDefault();
+        e.target.closest('form').requestSubmit();
+    }
+});
+
+// 履歴タブ: トグルボタンの開閉制御（イベント委譲）
+document.addEventListener('click', (e) => {
+    if (e.target.classList.contains('toggle-btn')) {
+        const content = e.target.nextElementSibling;
+        if (content.style.display === 'none') {
+            content.style.display = 'block';
+            e.target.textContent = '▼ 非表示';
+        } else {
+            content.style.display = 'none';
+            e.target.textContent = '▶ 表示';
+        }
+    }
+    if (e.target.dataset && e.target.dataset.action === 'open-all') {
+        document.querySelectorAll('.instruction-content').forEach(c => c.style.display = 'block');
+        document.querySelectorAll('.toggle-btn').forEach(b => b.textContent = '▼ 非表示');
+    }
+    if (e.target.dataset && e.target.dataset.action === 'close-all') {
+        document.querySelectorAll('.instruction-content').forEach(c => c.style.display = 'none');
+        document.querySelectorAll('.toggle-btn').forEach(b => b.textContent = '▶ 表示');
+    }
+});
+
+// WebSocket でリアルタイム出力を受信
+const ws = new WebSocket(`ws://${location.host}/ws`);
+ws.onmessage = (e) => {
+    const el = document.getElementById('shogun-output');
+    const wasAtBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 50;
+    el.innerHTML = '<pre>' + e.data + '</pre>';
+    // ユーザーが最下部付近にいる場合のみ自動スクロール
+    if (wasAtBottom) {
+        el.scrollTop = el.scrollHeight;
+    }
+};
+ws.onclose = () => {
+    document.getElementById('shogun-output').innerHTML = '<pre>接続が切断されました。ページをリロードしてください。</pre>';
+};
+
+// 監視タブ: 全ペインリアルタイム表示（throttling: 3秒間隔で負荷軽減）
+let lastMonitorUpdate = 0;
+const MONITOR_UPDATE_INTERVAL = 3000; // 3秒間隔（指揮タブはリアルタイム）
+
+const monitorWs = new WebSocket(`ws://${location.host}/ws/monitor`);
+monitorWs.onmessage = (e) => {
+    const now = Date.now();
+    if (now - lastMonitorUpdate < MONITOR_UPDATE_INTERVAL) {
+        return; // 前回更新から3秒経過していなければスキップ（負荷軽減）
+    }
+    lastMonitorUpdate = now;
+
+    const panes = JSON.parse(e.data);
+    const grid = document.getElementById('monitor-grid');
+    if (!grid) return;
+    grid.innerHTML = panes.map(p => `
+        <div class="pane-card">
+            <div class="pane-header">${p.agent_id}</div>
+            <div class="pane-output"><pre>${p.output}</pre></div>
+        </div>
+    `).join('');
+    // 各カードの自動スクロール
+    grid.querySelectorAll('.pane-output').forEach(el => {
+        el.scrollTop = el.scrollHeight;
+    });
+};
+monitorWs.onclose = () => {
+    const grid = document.getElementById('monitor-grid');
+    if (grid) grid.innerHTML = '<div class="monitor-loading">接続が切断されました。ページをリロードしてください。</div>';
+};
 </script>
 {% endblock %}

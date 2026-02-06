@@ -1,0 +1,164 @@
+"""Tests for monitor WebSocket endpoint and capture_all_panes functionality."""
+
+import pytest
+from unittest.mock import Mock, AsyncMock, patch
+from ws.tmux_bridge import TmuxBridge
+from ws.handlers import MonitorWebSocketHandler
+import json
+
+
+class TestCaptureAllPanes:
+    """Test TmuxBridge.capture_all_panes() method."""
+
+    def test_capture_all_panes_no_session(self):
+        """Test capture_all_panes when multiagent session is not found."""
+        with patch("libtmux.Server") as mock_server:
+            mock_server.return_value.sessions.get.return_value = None
+            bridge = TmuxBridge()
+            result = bridge.capture_all_panes()
+            assert result == []
+
+    def test_capture_all_panes_with_agent_ids(self):
+        """Test capture_all_panes with @agent_id set on panes."""
+        with patch("libtmux.Server") as mock_server:
+            # Mock multiagent session with 2 panes
+            mock_session = Mock()
+            mock_pane1 = Mock()
+            mock_pane1.pane_index = "0"
+            mock_pane1.show_option.return_value = "karo"
+            mock_pane1.capture_pane.return_value = ["line1", "line2", "line3"]
+
+            mock_pane2 = Mock()
+            mock_pane2.pane_index = "1"
+            mock_pane2.show_option.return_value = "ashigaru1"
+            mock_pane2.capture_pane.return_value = ["output1", "output2"]
+
+            mock_session.panes = [mock_pane1, mock_pane2]
+            mock_server.return_value.sessions.get.return_value = mock_session
+
+            bridge = TmuxBridge()
+            result = bridge.capture_all_panes()
+
+            assert len(result) == 2
+            assert result[0]["agent_id"] == "karo"
+            assert result[0]["pane_index"] == 0
+            assert result[0]["output"] == "line1\nline2\nline3"
+            assert result[1]["agent_id"] == "ashigaru1"
+            assert result[1]["pane_index"] == 1
+            assert result[1]["output"] == "output1\noutput2"
+
+    def test_capture_all_panes_without_agent_ids(self):
+        """Test capture_all_panes when @agent_id is not set."""
+        with patch("libtmux.Server") as mock_server:
+            mock_session = Mock()
+            mock_pane = Mock()
+            mock_pane.pane_index = "3"
+            mock_pane.show_option.return_value = None
+            mock_pane.capture_pane.return_value = ["output"]
+
+            mock_session.panes = [mock_pane]
+            mock_server.return_value.sessions.get.return_value = mock_session
+
+            bridge = TmuxBridge()
+            result = bridge.capture_all_panes()
+
+            assert len(result) == 1
+            assert result[0]["agent_id"] == "pane_3"
+            assert result[0]["pane_index"] == 3
+
+    def test_capture_all_panes_with_error(self):
+        """Test capture_all_panes when pane capture fails."""
+        with patch("libtmux.Server") as mock_server:
+            mock_session = Mock()
+            mock_pane = Mock()
+            mock_pane.pane_index = "0"
+            mock_pane.show_option.return_value = "karo"
+            mock_pane.capture_pane.side_effect = Exception("Capture failed")
+
+            mock_session.panes = [mock_pane]
+            mock_server.return_value.sessions.get.return_value = mock_session
+
+            bridge = TmuxBridge()
+            result = bridge.capture_all_panes()
+
+            assert len(result) == 1
+            assert result[0]["output"] == "Error: failed to capture pane"
+
+    def test_capture_all_panes_limits_lines(self):
+        """Test that capture_all_panes respects the lines parameter."""
+        with patch("libtmux.Server") as mock_server:
+            mock_session = Mock()
+            mock_pane = Mock()
+            mock_pane.pane_index = "0"
+            mock_pane.show_option.return_value = "karo"
+            # Return 10 lines
+            mock_pane.capture_pane.return_value = [f"line{i}" for i in range(10)]
+
+            mock_session.panes = [mock_pane]
+            mock_server.return_value.sessions.get.return_value = mock_session
+
+            bridge = TmuxBridge()
+            result = bridge.capture_all_panes(lines=5)
+
+            # Should only get the last 5 lines
+            assert result[0]["output"] == "line5\nline6\nline7\nline8\nline9"
+
+
+class TestMonitorWebSocketHandler:
+    """Test MonitorWebSocketHandler class."""
+
+    @pytest.mark.asyncio
+    async def test_monitor_handler_sends_json(self):
+        """Test that MonitorWebSocketHandler sends JSON data."""
+        mock_websocket = AsyncMock()
+
+        with patch("ws.handlers.TmuxBridge") as mock_bridge_class:
+            mock_bridge = Mock()
+            mock_bridge.capture_all_panes.return_value = [
+                {"agent_id": "karo", "pane_index": 0, "output": "test output"}
+            ]
+            mock_bridge_class.return_value = mock_bridge
+
+            handler = MonitorWebSocketHandler(mock_websocket)
+
+            # Mock asyncio.sleep to raise exception and exit loop
+            with patch("asyncio.sleep", side_effect=Exception("Stop loop")):
+                try:
+                    await handler.handle()
+                except Exception:
+                    pass
+
+            # Verify websocket.accept was called
+            mock_websocket.accept.assert_called_once()
+
+            # Verify send_text was called with JSON
+            assert mock_websocket.send_text.called
+            sent_data = mock_websocket.send_text.call_args[0][0]
+            parsed = json.loads(sent_data)
+            assert len(parsed) == 1
+            assert parsed[0]["agent_id"] == "karo"
+            assert parsed[0]["pane_index"] == 0
+            assert parsed[0]["output"] == "test output"
+
+    @pytest.mark.asyncio
+    async def test_monitor_handler_handles_exception(self):
+        """Test that MonitorWebSocketHandler handles exceptions during data capture gracefully."""
+        mock_websocket = AsyncMock()
+
+        with patch("ws.handlers.TmuxBridge") as mock_bridge_class:
+            mock_bridge = Mock()
+            # First call succeeds, second call raises exception
+            mock_bridge.capture_all_panes.side_effect = [
+                [{"agent_id": "karo", "pane_index": 0, "output": "test"}],
+                Exception("Capture failed")
+            ]
+            mock_bridge_class.return_value = mock_bridge
+
+            handler = MonitorWebSocketHandler(mock_websocket)
+            # Should not raise exception and exit gracefully
+            await handler.handle()
+
+            # Verify accept was called
+            mock_websocket.accept.assert_called_once()
+            # Verify send_text was called at least once (before exception)
+            assert mock_websocket.send_text.called

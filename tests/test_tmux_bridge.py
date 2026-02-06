@@ -190,14 +190,14 @@ def test_add_command_with_gaps(bridge_instance, tmp_path):
 
 
 # ========================================
-# Test: capture_karo_pane() (without tmux session)
+# Test: capture_shogun_pane() (without tmux session)
 # ========================================
 
-def test_capture_karo_pane_no_session(bridge_instance):
-    """Test capture_karo_pane when tmux session is not available."""
-    result = bridge_instance.capture_karo_pane()
+def test_capture_shogun_pane_no_session(bridge_instance):
+    """Test capture_shogun_pane when tmux session is not available."""
+    result = bridge_instance.capture_shogun_pane()
 
-    assert result == "Error: multiagent session not found"
+    assert result == "Error: shogun session not found"
 
 
 # ========================================
