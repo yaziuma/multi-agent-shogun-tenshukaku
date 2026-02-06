@@ -150,9 +150,19 @@ multi-agent-shogun-tenshukaku/
 uv run pytest
 ```
 
+## Compatibility
+
+Tenshukaku works with any multi-agent-shogun family system. All session names, pane targets, and base paths are configurable via `config/settings.yaml`.
+
+| System | Compatibility |
+|--------|--------------|
+| [yaziuma/multi-agent-bakuhu](https://github.com/yaziuma/multi-agent-bakuhu) | Developed for this system |
+| [yohey-w/multi-agent-shogun](https://github.com/yohey-w/multi-agent-shogun) | Compatible — adjust `bakuhu.base_path` and `tmux` session names in settings |
+
 ## Related Projects
 
 - [multi-agent-bakuhu](https://github.com/yaziuma/multi-agent-bakuhu) — The core multi-agent orchestration system that Tenshukaku controls
+- [multi-agent-shogun](https://github.com/yohey-w/multi-agent-shogun) — The upstream fork that bakuhu is based on
 
 ## License
 

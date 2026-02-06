@@ -150,9 +150,19 @@ multi-agent-shogun-tenshukaku/
 uv run pytest
 ```
 
+## 互換性
+
+天守閣は multi-agent-shogun 系システム全般で利用可能。セッション名、ペイン指定、ベースパスは全て `config/settings.yaml` で設定できる。
+
+| システム | 互換性 |
+|---------|--------|
+| [yaziuma/multi-agent-bakuhu](https://github.com/yaziuma/multi-agent-bakuhu) | 本システム向けに開発 |
+| [yohey-w/multi-agent-shogun](https://github.com/yohey-w/multi-agent-shogun) | 互換あり — settings の `bakuhu.base_path` と `tmux` セッション名を調整すれば利用可能 |
+
 ## 関連プロジェクト
 
 - [multi-agent-bakuhu](https://github.com/yaziuma/multi-agent-bakuhu) — 天守閣が制御するマルチエージェント統制システム本体
+- [multi-agent-shogun](https://github.com/yohey-w/multi-agent-shogun) — bakuhu のfork元
 
 ## ライセンス
 
