@@ -41,6 +41,39 @@ section h2 {
 }
 
 /* フォーム */
+.command-input form {
+    display: flex;
+    gap: 0.5rem;
+    align-items: stretch;
+}
+
+.command-input textarea {
+    flex: 2;
+    background: #1a1a2e;
+    color: #eee;
+    border: 1px solid #e94560;
+    border-radius: 4px;
+    padding: 0.5rem;
+    resize: vertical;
+    min-height: 120px;
+}
+
+.command-input button[type="submit"] {
+    flex: 1;
+    background: #e94560;
+    color: white;
+    border: none;
+    padding: 0.5rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    margin-top: 0;
+    align-self: stretch;
+}
+
+.command-input button[type="submit"]:hover {
+    background: #ff6b6b;
+}
+
 textarea {
     width: 100%;
     background: #1a1a2e;
@@ -198,15 +231,19 @@ footer {
     padding: 12px 0;
 }
 
-@media (max-width: 1024px) {
-    .monitor-grid {
-        grid-template-columns: repeat(2, 1fr);
-    }
-}
-
 @media (max-width: 768px) {
     .monitor-grid {
         grid-template-columns: 1fr;
+    }
+
+    .command-input form {
+        flex-direction: column;
+    }
+
+    .command-input textarea,
+    .command-input button[type="submit"] {
+        flex: none;
+        width: 100%;
     }
 }
 
