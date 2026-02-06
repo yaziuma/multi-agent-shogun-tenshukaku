@@ -9,3 +9,6 @@ tmux:
   shogun_session: "shogun"
   multiagent_session: "multiagent"
   shogun_pane: "0.0"
+
+monitor:
+  update_interval_ms: 5000  # 監視タブの更新間隔（ミリ秒）

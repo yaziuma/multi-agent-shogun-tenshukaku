@@ -154,9 +154,9 @@ ws.onclose = () => {
     document.getElementById('shogun-output').innerHTML = '<pre>接続が切断されました。ページをリロードしてください。</pre>';
 };
 
-// 監視タブ: 全ペインリアルタイム表示（throttling: 3秒間隔で負荷軽減）
+// 監視タブ: 全ペインリアルタイム表示（throttling設定で負荷軽減）
 let lastMonitorUpdate = 0;
-const MONITOR_UPDATE_INTERVAL = 3000; // 3秒間隔（指揮タブはリアルタイム）
+const MONITOR_UPDATE_INTERVAL = {{ monitor_interval }}; // 設定値による更新間隔（指揮タブはリアルタイム）
 
 const monitorWs = new WebSocket(`ws://${location.host}/ws/monitor`);
 monitorWs.onmessage = (e) => {
