@@ -1,4 +1,4 @@
-from fastapi import FastAPI, Request, WebSocket
+from fastapi import FastAPI, Request, WebSocket, Form
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
@@ -6,6 +6,7 @@ import uvicorn
 import yaml
 from pathlib import Path
 from ws.handlers import WebSocketHandler
+from ws.tmux_bridge import TmuxBridge
 
 app = FastAPI(title="Shogun Web Panel")
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -18,26 +19,52 @@ async def index(request: Request):
     return templates.TemplateResponse("index.html", {"request": request})
 
 
-@app.get("/api/dashboard")
+@app.get("/api/dashboard", response_class=HTMLResponse)
 async def get_dashboard():
     """Return dashboard.md content."""
-    # TODO: Read and return dashboard.md content
-    return {"status": "not_implemented"}
+    try:
+        bridge = TmuxBridge()
+        content = bridge.read_dashboard()
+        return f"<pre>{content}</pre>"
+    except Exception as e:
+        return f"<pre>Error: {e}</pre>"
 
 
 @app.post("/api/command")
-async def send_command(command: str):
+async def send_command(instruction: str = Form(...)):
     """
     Send command to karo via queue/shogun_to_karo.yaml.
 
     Args:
-        command: Command string to send to karo
+        instruction: Command string to send to karo
 
     Returns:
         Status of command submission
     """
-    # TODO: Append to queue/shogun_to_karo.yaml and send tmux send-keys
-    return {"status": "not_implemented", "command": command}
+    try:
+        bridge = TmuxBridge()
+        cmd_id = bridge.add_command(instruction)
+        bridge.send_to_karo(
+            f"queue/shogun_to_karo.yaml に新しい指示がある。{cmd_id} を確認して実行せよ。"
+        )
+        return {"status": "sent", "cmd_id": cmd_id}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.get("/api/history", response_class=HTMLResponse)
+async def get_history(request: Request):
+    """Return command history as HTML."""
+    try:
+        bridge = TmuxBridge()
+        commands = bridge.read_command_history()
+        commands.reverse()  # 最新順
+        return templates.TemplateResponse("partials/history.html", {
+            "request": request,
+            "commands": commands
+        })
+    except Exception as e:
+        return HTMLResponse(f"<pre>Error: {e}</pre>")
 
 
 @app.websocket("/ws")
