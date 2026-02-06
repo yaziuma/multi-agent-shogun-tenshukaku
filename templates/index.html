@@ -1,0 +1,37 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="container">
+    <!-- 指示入力フォーム -->
+    <section class="command-input">
+        <h2>📝 指示入力</h2>
+        <form hx-post="/api/command" hx-target="#command-result" hx-swap="innerHTML">
+            <textarea name="instruction" rows="5" placeholder="家老への指示を入力..."></textarea>
+            <button type="submit">送信</button>
+        </form>
+        <div id="command-result"></div>
+    </section>
+
+    <!-- リアルタイム出力表示（WebSocket） -->
+    <section class="realtime-output" hx-ext="ws" ws-connect="/ws">
+        <h2>🔄 家老ペイン出力</h2>
+        <div id="karo-output" class="terminal">
+            <!-- WebSocket経由で更新される -->
+        </div>
+    </section>
+
+    <!-- ダッシュボード表示 -->
+    <section class="dashboard">
+        <h2>📊 ダッシュボード</h2>
+        <div hx-get="/api/dashboard" hx-trigger="load, every 5s" hx-swap="innerHTML">
+            Loading...
+        </div>
+    </section>
+
+    <!-- コマンド履歴 -->
+    <section class="command-history">
+        <h2>📜 コマンド履歴</h2>
+        {% include "partials/history.html" %}
+    </section>
+</div>
+{% endblock %}

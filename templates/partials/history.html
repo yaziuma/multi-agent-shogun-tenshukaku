@@ -1,0 +1,13 @@
+<div class="history-list" hx-get="/api/history" hx-trigger="load, every 10s" hx-swap="innerHTML">
+    {% for cmd in commands %}
+    <div class="history-item {% if cmd.status == 'done' %}done{% else %}pending{% endif %}">
+        <span class="cmd-id">{{ cmd.cmd_id }}</span>
+        <span class="status">{{ cmd.status }}</span>
+        <span class="timestamp">{{ cmd.timestamp }}</span>
+        <details>
+            <summary>指示内容</summary>
+            <pre>{{ cmd.instruction }}</pre>
+        </details>
+    </div>
+    {% endfor %}
+</div>

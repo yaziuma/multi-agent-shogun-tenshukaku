@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}将軍パネル{% endblock %}</title>
+    <!-- htmx 2.x Core -->
+    <script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.0/dist/htmx.min.js"></script>
+    <!-- htmx WebSocket Extension -->
+    <script src="https://cdn.jsdelivr.net/npm/htmx-ext-ws@2.0.0/dist/ws.js"></script>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <header>
+        <h1>🏯 将軍パネル - Shogun Web Panel</h1>
+    </header>
+    <main>
+        {% block content %}{% endblock %}
+    </main>
+    <footer>
+        <p>multi-agent-bakuhu v2.2</p>
+    </footer>
+</body>
+</html>

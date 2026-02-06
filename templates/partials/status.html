@@ -1,0 +1,11 @@
+<div class="status-card">
+    <div class="status-header">
+        <span class="status-icon {% if status == 'done' %}done{% elif status == 'pending' %}pending{% else %}progress{% endif %}">
+            {% if status == 'done' %}✅{% elif status == 'pending' %}⏳{% else %}🔄{% endif %}
+        </span>
+        <span class="cmd-id">{{ cmd_id }}</span>
+    </div>
+    <div class="status-content">
+        {{ content | safe }}
+    </div>
+</div>
