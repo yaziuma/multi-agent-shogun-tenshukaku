@@ -3,6 +3,8 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 import uvicorn
+import yaml
+from pathlib import Path
 from ws.handlers import WebSocketHandler
 
 app = FastAPI(title="Shogun Web Panel")
@@ -45,5 +47,17 @@ async def websocket_endpoint(websocket: WebSocket):
     await handler.handle()
 
 
+def load_settings():
+    """Load settings from config/settings.yaml."""
+    settings_path = Path(__file__).parent / "config" / "settings.yaml"
+    with open(settings_path) as f:
+        return yaml.safe_load(f)
+
+
 if __name__ == "__main__":
-    uvicorn.run(app, host="127.0.0.1", port=8000)
+    settings = load_settings()
+    uvicorn.run(
+        app,
+        host=settings["server"]["host"],
+        port=settings["server"]["port"],
+    )
