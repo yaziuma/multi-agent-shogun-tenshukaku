@@ -1,6 +1,8 @@
 # multi-agent-shogun-tenshukaku
 
-[multi-agent-bakuhu](https://github.com/yaziuma/multi-agent-bakuhu) マルチエージェント統制システムのためのWeb制御パネル。天守閣 — 城主が戦場全体を見渡す司令塔にちなんで命名。
+> [yohey-w/multi-agent-shogun](https://github.com/yohey-w/multi-agent-shogun) およびそのfork向けに開発されたWeb制御パネル。`config/settings.yaml` の設定変更のみで multi-agent-shogun 系システム全般に対応。
+
+マルチエージェント統制システムのためのWeb制御パネル。天守閣 — 城主が戦場全体を見渡す司令塔にちなんで命名。
 
 ![指揮タブ](assets/screenshots/tab-command.png)
 
