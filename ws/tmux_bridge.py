@@ -5,12 +5,12 @@ This module provides integration between the web interface and tmux sessions,
 allowing remote control and monitoring of the multi-agent system.
 """
 
-import libtmux
 import subprocess
-from pathlib import Path
-import yaml
 from datetime import datetime
-from typing import Optional
+from pathlib import Path
+
+import libtmux
+import yaml
 
 
 class TmuxBridge:
@@ -19,11 +19,17 @@ class TmuxBridge:
     def __init__(self):
         """Initialize the tmux bridge and connect to the multiagent session."""
         self.server = libtmux.Server()
-        self.session = self.server.sessions.get(session_name="multiagent", default=None)
         settings_path = Path(__file__).parent.parent / "config" / "settings.yaml"
         with open(settings_path) as f:
             settings = yaml.safe_load(f)
         self.bakuhu_base = Path(settings["bakuhu"]["base_path"])
+        tmux_settings = settings.get("tmux", {})
+        self.shogun_session = tmux_settings.get("shogun_session", "shogun")
+        self.multiagent_session = tmux_settings.get("multiagent_session", "multiagent")
+        self.shogun_pane = tmux_settings.get("shogun_pane", "0.0")
+        self.session = self.server.sessions.get(
+            session_name=self.multiagent_session, default=None
+        )
 
     def capture_shogun_pane(self, lines: int = 50) -> str:
         """
@@ -36,7 +42,7 @@ class TmuxBridge:
             Captured pane output as string, or error message if pane not found
         """
         shogun_session = self.server.sessions.get(
-            session_name="shogun", default=None
+            session_name=self.shogun_session, default=None
         )
         if not shogun_session:
             return "Error: shogun session not found"
@@ -85,11 +91,9 @@ class TmuxBridge:
             except Exception:
                 output = "Error: failed to capture pane"
 
-            result.append({
-                "agent_id": agent_id,
-                "pane_index": pane_index,
-                "output": output
-            })
+            result.append(
+                {"agent_id": agent_id, "pane_index": pane_index, "output": output}
+            )
 
         return result
 
@@ -111,6 +115,7 @@ class TmuxBridge:
             pane = None
         if pane:
             import time
+
             pane.send_keys(message, enter=False)
             time.sleep(0.1)
             pane.send_keys("", enter=True)
@@ -119,7 +124,7 @@ class TmuxBridge:
 
     def send_to_shogun(self, message: str) -> bool:
         """Send a message to the shogun pane (shogun:0.0)."""
-        target = "shogun:0.0"
+        target = f"{self.shogun_session}:{self.shogun_pane}"
         try:
             subprocess.run(
                 ["tmux", "send-keys", "-t", target, message],
@@ -149,9 +154,11 @@ class TmuxBridge:
         # allowlist: 将来拡張可能
         ALLOWED_KEYS = {"Escape"}
         if key not in ALLOWED_KEYS:
-            raise ValueError(f"Key '{key}' is not allowed. Allowed keys: {ALLOWED_KEYS}")
+            raise ValueError(
+                f"Key '{key}' is not allowed. Allowed keys: {ALLOWED_KEYS}"
+            )
 
-        target = "shogun:0.0"
+        target = f"{self.shogun_session}:{self.shogun_pane}"
         try:
             subprocess.run(
                 ["tmux", "send-keys", "-t", target, key],
@@ -229,7 +236,9 @@ class TmuxBridge:
 
         # instructionの各行をインデントする（block scalar用）
         lines = instruction.rstrip("\n").split("\n")
-        indented_lines = "\n".join("    " + line if line.strip() else "" for line in lines)
+        indented_lines = "\n".join(
+            "    " + line if line.strip() else "" for line in lines
+        )
 
         entry = (
             f"- cmd_id: {new_cmd_id}\n"

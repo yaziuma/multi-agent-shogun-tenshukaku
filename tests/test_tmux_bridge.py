@@ -4,9 +4,10 @@ Unit tests for TmuxBridge module.
 These tests run in environments without tmux sessions by using mocks and temporary files.
 """
 
+import subprocess
+from unittest.mock import Mock, mock_open, patch
+
 import pytest
-from pathlib import Path
-from unittest.mock import Mock, patch, mock_open
 import yaml
 
 
@@ -22,9 +23,12 @@ def mock_tmux_server():
 def mock_settings(tmp_path):
     """Mock settings.yaml to use tmp_path as bakuhu_base."""
     settings_content = {
-        "bakuhu": {
-            "base_path": str(tmp_path)
-        }
+        "bakuhu": {"base_path": str(tmp_path)},
+        "tmux": {
+            "shogun_session": "shogun",
+            "multiagent_session": "multiagent",
+            "shogun_pane": "0.0",
+        },
     }
     return settings_content
 
@@ -37,9 +41,10 @@ def bridge_instance(mock_tmux_server, mock_settings, tmp_path):
     This fixture mocks libtmux.Server and settings.yaml loading,
     allowing tests to run without an actual tmux session.
     """
-    with patch('libtmux.Server', return_value=mock_tmux_server):
-        with patch('builtins.open', mock_open(read_data=yaml.dump(mock_settings))):
+    with patch("libtmux.Server", return_value=mock_tmux_server):
+        with patch("builtins.open", mock_open(read_data=yaml.dump(mock_settings))):
             from ws.tmux_bridge import TmuxBridge
+
             bridge = TmuxBridge()
             # Override bakuhu_base to use tmp_path
             bridge.bakuhu_base = tmp_path
@@ -49,6 +54,7 @@ def bridge_instance(mock_tmux_server, mock_settings, tmp_path):
 # ========================================
 # Test: read_dashboard()
 # ========================================
+
 
 def test_read_dashboard_exists(bridge_instance, tmp_path):
     """Test reading dashboard.md when it exists."""
@@ -72,6 +78,7 @@ def test_read_dashboard_not_found(bridge_instance, tmp_path):
 # Test: read_command_history()
 # ========================================
 
+
 def test_read_command_history_exists(bridge_instance, tmp_path):
     """Test reading command history when shogun_to_karo.yaml exists."""
     queue_dir = tmp_path / "queue"
@@ -81,7 +88,7 @@ def test_read_command_history_exists(bridge_instance, tmp_path):
     test_commands = {
         "commands": [
             {"cmd_id": "cmd_001", "instruction": "Test command 1"},
-            {"cmd_id": "cmd_002", "instruction": "Test command 2"}
+            {"cmd_id": "cmd_002", "instruction": "Test command 2"},
         ]
     }
     with open(yaml_path, "w") as f:
@@ -117,6 +124,7 @@ def test_read_command_history_empty_file(bridge_instance, tmp_path):
 # Test: add_command()
 # ========================================
 
+
 def test_add_command_new_file(bridge_instance, tmp_path):
     """Test adding a command when shogun_to_karo.yaml does not exist."""
     queue_dir = tmp_path / "queue"
@@ -147,9 +155,7 @@ def test_add_command_increment_id(bridge_instance, tmp_path):
 
     # Create existing command
     existing_data = {
-        "commands": [
-            {"cmd_id": "cmd_001", "instruction": "First command"}
-        ]
+        "commands": [{"cmd_id": "cmd_001", "instruction": "First command"}]
     }
     with open(yaml_path, "w") as f:
         yaml.dump(existing_data, f)
@@ -177,7 +183,7 @@ def test_add_command_with_gaps(bridge_instance, tmp_path):
     existing_data = {
         "commands": [
             {"cmd_id": "cmd_001", "instruction": "First"},
-            {"cmd_id": "cmd_005", "instruction": "Fifth"}
+            {"cmd_id": "cmd_005", "instruction": "Fifth"},
         ]
     }
     with open(yaml_path, "w") as f:
@@ -193,6 +199,7 @@ def test_add_command_with_gaps(bridge_instance, tmp_path):
 # Test: capture_shogun_pane() (without tmux session)
 # ========================================
 
+
 def test_capture_shogun_pane_no_session(bridge_instance):
     """Test capture_shogun_pane when tmux session is not available."""
     result = bridge_instance.capture_shogun_pane()
@@ -203,6 +210,7 @@ def test_capture_shogun_pane_no_session(bridge_instance):
 # ========================================
 # Test: send_to_karo() (without tmux session)
 # ========================================
+
 
 def test_send_to_karo_no_session(bridge_instance):
     """Test send_to_karo when tmux session is not available."""
@@ -215,8 +223,52 @@ def test_send_to_karo_no_session(bridge_instance):
 # Test: send_to_shogun() (without tmux session)
 # ========================================
 
+
 def test_send_to_shogun_no_session(bridge_instance):
-    """Test send_to_shogun when shogun session is not available."""
-    result = bridge_instance.send_to_shogun("test message")
+    """Test send_to_shogun when tmux command fails."""
+    with patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "tmux")):
+        result = bridge_instance.send_to_shogun("test message")
 
     assert result is False
+
+
+# ========================================
+# Test: tmux settings configuration
+# ========================================
+
+
+def test_tmux_settings_from_config(mock_tmux_server, tmp_path):
+    """Test that tmux settings are correctly loaded from config."""
+    settings_content = {
+        "bakuhu": {"base_path": str(tmp_path)},
+        "tmux": {
+            "shogun_session": "my_shogun",
+            "multiagent_session": "my_multiagent",
+            "shogun_pane": "1.0",
+        },
+    }
+    with patch("libtmux.Server", return_value=mock_tmux_server):
+        with patch("builtins.open", mock_open(read_data=yaml.dump(settings_content))):
+            from ws.tmux_bridge import TmuxBridge
+
+            bridge = TmuxBridge()
+
+    assert bridge.shogun_session == "my_shogun"
+    assert bridge.multiagent_session == "my_multiagent"
+    assert bridge.shogun_pane == "1.0"
+
+
+def test_tmux_settings_defaults_when_missing(mock_tmux_server, tmp_path):
+    """Test that default values are used when tmux section is missing."""
+    settings_content = {
+        "bakuhu": {"base_path": str(tmp_path)},
+    }
+    with patch("libtmux.Server", return_value=mock_tmux_server):
+        with patch("builtins.open", mock_open(read_data=yaml.dump(settings_content))):
+            from ws.tmux_bridge import TmuxBridge
+
+            bridge = TmuxBridge()
+
+    assert bridge.shogun_session == "shogun"
+    assert bridge.multiagent_session == "multiagent"
+    assert bridge.shogun_pane == "0.0"

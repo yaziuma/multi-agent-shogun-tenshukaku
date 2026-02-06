@@ -4,3 +4,8 @@ server:
 
 bakuhu:
   base_path: "/home/quieter/projects/multi-agent-bakuhu"
+
+tmux:
+  shogun_session: "shogun"
+  multiagent_session: "multiagent"
+  shogun_pane: "0.0"
