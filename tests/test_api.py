@@ -29,7 +29,7 @@ def mock_bridge():
             },
         ]
         instance.add_command.return_value = "cmd_003"
-        instance.send_to_karo.return_value = True
+        instance.send_to_shogun.return_value = True
         yield instance
 
 
@@ -96,12 +96,12 @@ class TestCommandAPI:
         response = client.post("/api/command", data={"instruction": "deploy system"})
         mock_bridge.add_command.assert_called_once_with("deploy system")
 
-    def test_command_calls_send_to_karo(self, client, mock_bridge):
-        """send_to_karo() が呼ばれる"""
+    def test_command_calls_send_to_shogun(self, client, mock_bridge):
+        """send_to_shogun() が呼ばれる"""
         response = client.post("/api/command", data={"instruction": "test"})
-        mock_bridge.send_to_karo.assert_called_once()
+        mock_bridge.send_to_shogun.assert_called_once()
         # 呼び出し引数に cmd_id が含まれているか確認
-        call_args = mock_bridge.send_to_karo.call_args[0][0]
+        call_args = mock_bridge.send_to_shogun.call_args[0][0]
         assert "cmd_003" in call_args
 
     def test_command_returns_cmd_id(self, client, mock_bridge):

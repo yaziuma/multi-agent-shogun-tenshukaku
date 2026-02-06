@@ -135,7 +135,7 @@ def test_add_command_new_file(bridge_instance, tmp_path):
 
     assert len(data["commands"]) == 1
     assert data["commands"][0]["cmd_id"] == "cmd_001"
-    assert data["commands"][0]["instruction"] == "Test instruction"
+    assert data["commands"][0]["instruction"].strip() == "Test instruction"
     assert data["commands"][0]["status"] == "pending"
 
 
@@ -207,5 +207,16 @@ def test_capture_karo_pane_no_session(bridge_instance):
 def test_send_to_karo_no_session(bridge_instance):
     """Test send_to_karo when tmux session is not available."""
     result = bridge_instance.send_to_karo("test message")
+
+    assert result is False
+
+
+# ========================================
+# Test: send_to_shogun() (without tmux session)
+# ========================================
+
+def test_send_to_shogun_no_session(bridge_instance):
+    """Test send_to_shogun when shogun session is not available."""
+    result = bridge_instance.send_to_shogun("test message")
 
     assert result is False

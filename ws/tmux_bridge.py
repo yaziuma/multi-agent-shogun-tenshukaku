@@ -61,6 +61,27 @@ class TmuxBridge:
             return True
         return False
 
+    def send_to_shogun(self, message: str) -> bool:
+        """
+        Send a message to the shogun pane (shogun:0.0).
+
+        Args:
+            message: Message to send to shogun
+
+        Returns:
+            True if successful, False otherwise
+        """
+        shogun_session = self.server.sessions.get(
+            session_name="shogun", default=None
+        )
+        if not shogun_session:
+            return False
+        pane = shogun_session.panes.get(pane_index="0", default=None)
+        if pane:
+            pane.send_keys(message)
+            return True
+        return False
+
     def read_dashboard(self) -> str:
         """
         Read the contents of dashboard.md.
@@ -91,6 +112,8 @@ class TmuxBridge:
         """
         Add a new command to queue/shogun_to_karo.yaml.
 
+        Uses file-append mode to preserve existing YAML formatting.
+
         Args:
             instruction: Command instruction text
 
@@ -99,15 +122,14 @@ class TmuxBridge:
         """
         yaml_path = self.bakuhu_base / "queue/shogun_to_karo.yaml"
 
-        # Load existing data
+        # 既存データからcmd_idの最大値を取得
         if yaml_path.exists():
             with open(yaml_path) as f:
                 data = yaml.safe_load(f) or {"commands": []}
+            existing_ids = [c.get("cmd_id", "") for c in data.get("commands", [])]
         else:
-            data = {"commands": []}
+            existing_ids = []
 
-        # Generate new cmd_id
-        existing_ids = [c.get("cmd_id", "") for c in data["commands"]]
         max_num = 0
         for cid in existing_ids:
             if cid.startswith("cmd_"):
@@ -118,18 +140,28 @@ class TmuxBridge:
                     pass
         new_cmd_id = f"cmd_{max_num + 1:03d}"
 
-        # Add new command
-        new_command = {
-            "cmd_id": new_cmd_id,
-            "timestamp": datetime.now().isoformat(),
-            "status": "pending",
-            "priority": "normal",
-            "instruction": instruction
-        }
-        data["commands"].append(new_command)
+        timestamp = datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
-        # Save
-        with open(yaml_path, "w") as f:
-            yaml.dump(data, f, allow_unicode=True, default_flow_style=False)
+        # ファイルが存在しない場合はヘッダーを書く
+        if not yaml_path.exists():
+            yaml_path.parent.mkdir(parents=True, exist_ok=True)
+            with open(yaml_path, "w") as f:
+                f.write("commands:\n")
+
+        # instructionの各行をインデントする（block scalar用）
+        lines = instruction.rstrip("\n").split("\n")
+        indented_lines = "\n".join("    " + line if line.strip() else "" for line in lines)
+
+        entry = (
+            f"- cmd_id: {new_cmd_id}\n"
+            f"  priority: normal\n"
+            f"  status: pending\n"
+            f"  timestamp: '{timestamp}'\n"
+            f"  instruction: |\n"
+            f"{indented_lines}\n"
+        )
+
+        with open(yaml_path, "a") as f:
+            f.write(entry)
 
         return new_cmd_id
