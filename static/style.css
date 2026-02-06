@@ -1,285 +1,690 @@
-/* 基本スタイル */
+/* =========================================
+   Shogun Web Panel - 和風ちょいダサ Theme
+   対象HTML: 提示された index.html のクラス構成そのまま
+   ========================================= */
+
+:root {
+    --ink: #2a1b12;
+    --paper: #f1e4c8;
+    --paper2: #e8d4aa;
+    --wood1: #6b4a2d;
+    --wood2: #4a2f1a;
+    --lacquer: #b11f2a; /* 朱 */
+    --lacquer2: #d13a44;
+    --gold: #d8bb74;
+    --blackboard: #16110d;
+    --shadow: rgba(0, 0, 0, 0.35);
+    --line: rgba(75, 45, 20, 0.55);
+    --radius: 12px;
+    --mono:
+        ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono",
+        monospace;
+}
+
+/* ===== リセット軽く ===== */
 * {
     box-sizing: border-box;
-    margin: 0;
-    padding: 0;
 }
-
+html,
 body {
-    font-family: 'Segoe UI', Tahoma, sans-serif;
-    background: #1a1a2e;
-    color: #eee;
-    line-height: 1.6;
+    height: 100%;
+}
+body {
+    margin: 0;
+    color: var(--ink);
+    font-family:
+        system-ui,
+        -apple-system,
+        "Segoe UI",
+        Roboto,
+        "Noto Sans JP",
+        "Hiragino Kaku Gothic ProN",
+        "Yu Gothic",
+        sans-serif;
+
+    /* 背景：木目（画像なし） */
+    background:
+        radial-gradient(
+            1200px 700px at 20% 10%,
+            rgba(255, 255, 255, 0.12),
+            transparent 55%
+        ),
+        radial-gradient(
+            900px 600px at 80% 30%,
+            rgba(0, 0, 0, 0.18),
+            transparent 60%
+        ),
+        repeating-linear-gradient(
+            90deg,
+            rgba(255, 255, 255, 0.06) 0px,
+            rgba(255, 255, 255, 0.06) 2px,
+            rgba(0, 0, 0, 0.06) 3px,
+            rgba(0, 0, 0, 0.06) 6px
+        ),
+        linear-gradient(180deg, var(--wood1), var(--wood2));
 }
 
+/* ===== ヘッダ：赤い幕＋金ライン ===== */
 header {
-    background: #16213e;
-    padding: 1rem;
-    text-align: center;
-    border-bottom: 2px solid #e94560;
+    max-width: 1200px;
+    margin: 20px auto 10px;
+    padding: 14px 16px;
+    border-radius: 14px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent),
+        repeating-linear-gradient(
+            90deg,
+            rgba(0, 0, 0, 0.08) 0 6px,
+            rgba(255, 255, 255, 0.04) 6px 12px
+        ),
+        linear-gradient(180deg, #7a1b20, #4e1014);
+    border: 2px solid rgba(0, 0, 0, 0.35);
+    box-shadow:
+        inset 0 2px 0 rgba(255, 255, 255, 0.2),
+        0 14px 30px rgba(0, 0, 0, 0.35);
 }
 
+header h1 {
+    margin: 0;
+    text-align: center;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    color: #f3ead3;
+    text-shadow: 0 2px 0 rgba(0, 0, 0, 0.55);
+}
+
+/* ===== メイン枠：額縁 ===== */
 main {
     max-width: 1200px;
     margin: 0 auto;
-    padding: 1rem;
+    padding: 12px 12px 18px;
 }
 
-/* セクション */
-section {
-    background: #0f3460;
-    border-radius: 8px;
-    padding: 1rem;
-    margin-bottom: 1rem;
+.container {
+    padding: 14px;
+    border-radius: 16px;
+    border: 6px solid rgba(35, 20, 10, 0.65);
+    background: rgba(0, 0, 0, 0.1);
+    box-shadow: 0 18px 42px rgba(0, 0, 0, 0.35);
 }
 
-section h2 {
-    color: #e94560;
-    margin-bottom: 0.5rem;
-    border-bottom: 1px solid #e94560;
-    padding-bottom: 0.5rem;
-}
-
-/* フォーム */
-.command-input form {
-    display: flex;
-    gap: 0.5rem;
-    align-items: stretch;
-}
-
-.command-input textarea {
-    flex: 2;
-    background: #1a1a2e;
-    color: #eee;
-    border: 1px solid #e94560;
-    border-radius: 4px;
-    padding: 0.5rem;
-    resize: vertical;
-    min-height: 120px;
-}
-
-.command-input button[type="submit"] {
-    flex: 1;
-    background: #e94560;
-    color: white;
-    border: none;
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    cursor: pointer;
-    margin-top: 0;
-    align-self: stretch;
-}
-
-.command-input button[type="submit"]:hover {
-    background: #ff6b6b;
-}
-
-textarea {
-    width: 100%;
-    background: #1a1a2e;
-    color: #eee;
-    border: 1px solid #e94560;
-    border-radius: 4px;
-    padding: 0.5rem;
-    resize: vertical;
-}
-
-button {
-    background: #e94560;
-    color: white;
-    border: none;
-    padding: 0.5rem 1rem;
-    border-radius: 4px;
-    cursor: pointer;
-    margin-top: 0.5rem;
-}
-
-button:hover {
-    background: #ff6b6b;
-}
-
-/* ターミナル出力 */
-.terminal {
-    background: #0a0a0a;
-    border: 1px solid #333;
-    border-radius: 4px;
-    padding: 1rem;
-    font-family: 'Courier New', monospace;
-    font-size: 0.9rem;
-    max-height: 400px;
-    overflow-y: auto;
-    white-space: pre-wrap;
-}
-
-/* ステータス */
-.done { color: #4caf50; }
-.pending { color: #ff9800; }
-.progress { color: #2196f3; }
-
-/* 履歴 */
-.history-item {
-    background: #1a1a2e;
-    padding: 0.5rem;
-    margin: 0.5rem 0;
-    border-radius: 4px;
-    border-left: 3px solid #e94560;
-}
-
-.history-item.done {
-    border-left-color: #4caf50;
-}
-
-.cmd-id {
-    font-weight: bold;
-    color: #e94560;
-}
-
-/* 履歴コントロール */
-.history-controls {
-    display: flex;
-    gap: 0.5rem;
-    margin-bottom: 0.5rem;
-}
-
-.btn-toggle-all, .btn-refresh {
-    background: #16213e;
-    color: #ccc;
-    border: 1px solid #333;
-    padding: 0.3rem 0.8rem;
-    font-size: 0.85rem;
-    margin-top: 0;
-}
-
-.btn-toggle-all:hover, .btn-refresh:hover {
-    background: #1a2744;
-    color: #fff;
-}
-
-.description {
-    color: #888;
-    font-size: 0.85rem;
-    margin-bottom: 0.5rem;
-}
-
-details summary {
-    cursor: pointer;
-    color: #888;
-}
-
-details pre {
-    margin-top: 0.5rem;
-    padding: 0.5rem;
-    background: #0a0a0a;
-    border-radius: 4px;
-    overflow-x: auto;
-}
-
-footer {
-    text-align: center;
-    padding: 1rem;
-    color: #666;
-}
-
-/* タブナビゲーション */
+/* ===== タブ：木札っぽい ===== */
 .tab-nav {
     display: flex;
-    gap: 0;
-    margin-bottom: 0;
-    background: #16213e;
-    border-radius: 8px 8px 0 0;
-    overflow: hidden;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 14px;
+    background: rgba(0, 0, 0, 0.12);
+    border: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .tab-btn {
     flex: 1;
-    background: #16213e;
-    color: #888;
-    border: none;
-    padding: 0.75rem 1.5rem;
+    padding: 12px 10px;
+    border-radius: 10px;
     cursor: pointer;
-    font-size: 1rem;
-    border-bottom: 3px solid transparent;
-    transition: all 0.2s;
-    margin-top: 0;
-    border-radius: 0;
+    user-select: none;
+
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    color: #f5ebd6;
+
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent),
+        linear-gradient(180deg, #5c3a22, #3d2415);
+    border: 2px solid rgba(0, 0, 0, 0.35);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    position: relative;
+}
+
+.tab-btn::before,
+.tab-btn::after {
+    content: "";
+    position: absolute;
+    left: 12px;
+    right: 12px;
+    height: 2px;
+    background: rgba(216, 187, 116, 0.55); /* 金線 */
+}
+.tab-btn::before {
+    top: 7px;
+}
+.tab-btn::after {
+    bottom: 7px;
 }
 
 .tab-btn:hover {
-    color: #eee;
-    background: #1a2744;
+    filter: brightness(1.05);
+    transform: translateY(-1px);
 }
 
 .tab-btn.active {
-    color: #e94560;
-    border-bottom-color: #e94560;
-    background: #0f3460;
+    color: var(--ink);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.35), transparent),
+        linear-gradient(180deg, var(--paper), var(--paper2));
+    border-color: rgba(90, 50, 20, 0.6);
+    box-shadow:
+        inset 0 2px 0 rgba(255, 255, 255, 0.45),
+        0 10px 18px rgba(0, 0, 0, 0.35);
 }
 
+/* ===== タブ内容 ===== */
 .tab-content {
-    display: none;
+    margin-top: 14px;
+    display: none; /* JSが active で切替 */
 }
-
 .tab-content.active {
     display: block;
 }
 
-/* 監視タブ: ペイングリッド */
-.monitor-grid {
-    display: grid;
-    grid-template-columns: repeat(2, 1fr);
-    gap: 12px;
-    padding: 12px 0;
+/* ===== セクション：和紙パネル ===== */
+.command-input,
+.realtime-output,
+.dashboard,
+.command-history,
+.monitor-section {
+    margin-top: 14px;
+    padding: 14px;
+    border-radius: var(--radius);
+    border: 2px solid rgba(90, 50, 20, 0.55);
+
+    background:
+    /* うっすい“ちり”ノイズ：Data URI SVG */
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.12'/%3E%3C/svg%3E"),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.25), transparent),
+        linear-gradient(180deg, var(--paper), var(--paper2));
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
 }
 
-@media (max-width: 768px) {
+/* 見出し：◆▼で時代劇管理画面 */
+section h2 {
+    margin: 0 0 10px;
+    padding: 8px 10px;
+    border-bottom: 2px solid rgba(120, 70, 25, 0.45);
+    font-weight: 900;
+    letter-spacing: 0.05em;
+    position: relative;
+}
+section h2::before {
+    content: "◆";
+    margin-right: 8px;
+    color: var(--lacquer);
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.3);
+}
+section h2::after {
+    content: "▼";
+    position: absolute;
+    right: 6px;
+    top: 8px;
+    color: rgba(120, 70, 25, 0.7);
+}
+
+.description {
+    margin: 0 0 10px;
+    padding: 8px 10px;
+    border-left: 6px solid rgba(177, 31, 42, 0.55);
+    background: rgba(255, 255, 255, 0.35);
+    border-radius: 10px;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.45);
+}
+
+/* ===== フォーム ===== */
+form {
+    display: flex;
+    gap: 10px;
+    flex-direction: column;
+}
+
+textarea[name="instruction"] {
+    width: 100%;
+    min-height: 140px;
+    resize: vertical;
+
+    color: #f5f1e8;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.06), transparent),
+        linear-gradient(180deg, rgba(0, 0, 0, 0.65), rgba(0, 0, 0, 0.78));
+    border: 3px solid rgba(90, 50, 20, 0.65);
+    border-radius: 10px;
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.08);
+    padding: 12px;
+    outline: none;
+    font-family: inherit;
+}
+
+textarea[name="instruction"]::placeholder {
+    color: rgba(245, 235, 214, 0.55);
+}
+
+textarea[name="instruction"]:focus {
+    box-shadow:
+        0 0 0 3px rgba(216, 187, 116, 0.35),
+        inset 0 2px 0 rgba(255, 255, 255, 0.08);
+}
+
+/* ボタン行：送信とEscを等幅で横並び */
+.btn-row {
+    display: flex;
+    gap: 10px;
+}
+.btn-row > button {
+    flex: 1;
+}
+
+/* 送信ボタン：朱印っぽい（影強め＝ダサくて良い） */
+form button[type="submit"] {
+    padding: 12px 18px;
+    border-radius: 12px;
+    border: 3px solid rgba(40, 10, 10, 0.55);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent),
+        linear-gradient(180deg, var(--lacquer2), var(--lacquer));
+    color: #fff6e7;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
+    cursor: pointer;
+
+    box-shadow:
+        0 10px 0 rgba(70, 20, 20, 0.55),
+        0 14px 22px rgba(0, 0, 0, 0.35);
+    transform: translateY(0);
+}
+
+form button[type="submit"]:active {
+    transform: translateY(8px);
+    box-shadow:
+        0 2px 0 rgba(70, 20, 20, 0.55),
+        0 8px 14px rgba(0, 0, 0, 0.35);
+}
+
+/* ===== コマンド結果 ===== */
+#command-result {
+    margin-top: 6px;
+    padding: 10px;
+    border-radius: 10px;
+    border: 2px dashed rgba(120, 70, 25, 0.5);
+    background: rgba(255, 255, 255, 0.35);
+}
+
+/* ===== ターミナル風（リアルタイム出力） ===== */
+.terminal {
+    border-radius: 12px;
+    border: 2px solid rgba(0, 0, 0, 0.35);
+    background:
+        repeating-linear-gradient(
+            0deg,
+            rgba(255, 255, 255, 0.04) 0 2px,
+            rgba(0, 0, 0, 0.06) 2px 4px
+        ),
+        linear-gradient(180deg, #1a1410, #0f0c0a);
+    color: #e9e2d2;
+    box-shadow: inset 0 2px 0 rgba(255, 255, 255, 0.06);
+
+    max-height: 420px;
+    overflow: auto;
+    padding: 12px;
+}
+
+.terminal pre {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* ===== 監視グリッド ===== */
+.monitor-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px;
+}
+
+@media (max-width: 980px) {
+    .monitor-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+    }
+}
+@media (max-width: 640px) {
     .monitor-grid {
         grid-template-columns: 1fr;
     }
-
-    .command-input form {
-        flex-direction: column;
-    }
-
-    .command-input textarea,
-    .command-input button[type="submit"] {
-        flex: none;
-        width: 100%;
-    }
 }
 
+.monitor-loading {
+    padding: 14px;
+    border-radius: 12px;
+    border: 2px dashed rgba(120, 70, 25, 0.5);
+    background: rgba(255, 255, 255, 0.35);
+}
+
+/* paneカード：木枠＋中身は黒板 */
 .pane-card {
-    border: 1px solid #444;
-    border-radius: 6px;
+    border-radius: 14px;
+    border: 2px solid rgba(90, 50, 20, 0.55);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.16), transparent),
+        linear-gradient(180deg, var(--paper), var(--paper2));
+    box-shadow: 0 10px 20px rgba(0, 0, 0, 0.28);
     overflow: hidden;
-    background: #1a1a2e;
 }
 
 .pane-header {
-    background: #16213e;
-    padding: 6px 12px;
-    font-weight: bold;
-    font-size: 1em;
-    color: #e94560;
-    border-bottom: 1px solid #444;
+    padding: 10px 12px;
+    font-weight: 900;
+    letter-spacing: 0.06em;
+    color: #f3ead3;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.1), transparent),
+        linear-gradient(180deg, #5c3a22, #3d2415);
+    border-bottom: 2px solid rgba(0, 0, 0, 0.25);
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
 }
 
 .pane-output {
-    max-height: 250px;
-    overflow-y: auto;
-    padding: 8px;
-    font-size: 0.9em;
-    line-height: 1.3;
+    max-height: 260px;
+    overflow: auto;
+    padding: 10px;
+    background:
+        repeating-linear-gradient(
+            0deg,
+            rgba(255, 255, 255, 0.04) 0 2px,
+            rgba(0, 0, 0, 0.06) 2px 4px
+        ),
+        linear-gradient(180deg, #1a1410, #0f0c0a);
+    color: #e9e2d2;
 }
 
 .pane-output pre {
     margin: 0;
+    font-family: var(--mono);
+    font-size: 12px;
     white-space: pre-wrap;
-    word-wrap: break-word;
+    word-break: break-word;
 }
 
-.monitor-loading {
-    grid-column: 1 / -1;
+/* ===== 履歴タブUI ===== */
+.history-controls {
+    display: flex;
+    gap: 10px;
+    flex-wrap: wrap;
+    margin-bottom: 10px;
+}
+
+.history-controls button {
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 2px solid rgba(90, 50, 20, 0.55);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent),
+        linear-gradient(180deg, #f0dcae, #e0c487);
+    color: var(--ink);
+    font-weight: 900;
+    cursor: pointer;
+    box-shadow:
+        0 8px 0 rgba(90, 60, 25, 0.55),
+        0 12px 18px rgba(0, 0, 0, 0.25);
+}
+
+.history-controls button:active {
+    transform: translateY(6px);
+    box-shadow:
+        0 2px 0 rgba(90, 60, 25, 0.55),
+        0 8px 14px rgba(0, 0, 0, 0.25);
+}
+
+/* リスト */
+.history-list {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+}
+
+/* 各アイテム：札感 */
+.history-item {
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: 2px solid rgba(90, 50, 20, 0.55);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.25), transparent),
+        linear-gradient(180deg, #f1e4c8, #e7d4aa);
+    box-shadow: 0 10px 18px rgba(0, 0, 0, 0.22);
+}
+
+/* ステータス色：ちょい派手（ダサ可） */
+.history-item.pending {
+    border-color: rgba(177, 31, 42, 0.55);
+    box-shadow:
+        0 10px 18px rgba(177, 31, 42, 0.12),
+        0 10px 18px rgba(0, 0, 0, 0.22);
+}
+
+.history-item.done {
+    border-color: rgba(50, 110, 70, 0.55);
+    box-shadow:
+        0 10px 18px rgba(50, 110, 70, 0.1),
+        0 10px 18px rgba(0, 0, 0, 0.22);
+}
+
+/* 行内のチップ */
+.cmd-id,
+.status,
+.timestamp {
+    display: inline-block;
+    margin-right: 10px;
+    padding: 4px 8px;
+    border-radius: 999px;
+    border: 2px solid rgba(90, 50, 20, 0.45);
+    background: rgba(255, 255, 255, 0.45);
+    font-weight: 800;
+    font-size: 12px;
+}
+
+.status {
+    border-color: rgba(0, 0, 0, 0.25);
+}
+
+.toggle-btn {
+    padding: 8px 10px;
+    border-radius: 10px;
+    border: 2px solid rgba(40, 10, 10, 0.45);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.2), transparent),
+        linear-gradient(180deg, var(--lacquer2), var(--lacquer));
+    color: #fff6e7;
+    font-weight: 900;
+    cursor: pointer;
+    box-shadow:
+        0 8px 0 rgba(70, 20, 20, 0.5),
+        0 12px 16px rgba(0, 0, 0, 0.22);
+}
+
+.toggle-btn:active {
+    transform: translateY(6px);
+    box-shadow:
+        0 2px 0 rgba(70, 20, 20, 0.5),
+        0 8px 12px rgba(0, 0, 0, 0.22);
+}
+
+.instruction-content {
+    margin-top: 10px;
+    border-radius: 12px;
+    border: 2px solid rgba(90, 50, 20, 0.55);
+    background:
+        repeating-linear-gradient(
+            0deg,
+            rgba(255, 255, 255, 0.04) 0 2px,
+            rgba(0, 0, 0, 0.06) 2px 4px
+        ),
+        linear-gradient(180deg, #1a1410, #0f0c0a);
+    color: #e9e2d2;
+    padding: 10px;
+    overflow: auto;
+    max-height: 320px;
+}
+
+.instruction-content pre {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* ===== フッタ ===== */
+footer {
+    max-width: 1200px;
+    margin: 10px auto 24px;
     text-align: center;
-    padding: 40px;
-    color: #888;
+    color: rgba(245, 235, 214, 0.85);
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
+    opacity: 0.9;
+}
+footer p {
+    margin: 0;
+    padding: 10px 0;
+}
+/* ===== Mobile readability boost ===== */
+@media (max-width: 640px) {
+    /* 全体の左右余白を削る */
+    body {
+        padding: 0;
+    }
+
+    /* いちばん効く：コンテナを“全幅”寄せにする */
+    .container {
+        width: 100%;
+        max-width: none;
+        margin: 0;
+        padding: 8px; /* ここが太いと全部死ぬ */
+    }
+
+    /* カード（セクション枠）の余白を圧縮 */
+    section,
+    .command-input,
+    .realtime-output,
+    .dashboard,
+    .command-history,
+    .monitor-section {
+        padding: 10px;
+        border-radius: 12px;
+    }
+
+    /* 見出し・説明の詰まりを軽減 */
+    h2 {
+        font-size: 18px;
+        line-height: 1.25;
+        margin-bottom: 8px;
+    }
+    .description {
+        font-size: 14px;
+        line-height: 1.4;
+    }
+
+    /* テキスト入力を「読める・打てる」サイズに */
+    textarea[name="instruction"] {
+        font-size: 16px; /* iOSの自動ズーム回避にも効く */
+        line-height: 1.4;
+        padding: 12px;
+        min-height: 24vh; /* これで“書ける”高さになる */
+        max-height: 40vh;
+        width: 100%;
+        box-sizing: border-box;
+    }
+
+    /* ボタン行：モバイルでも横並び等幅 */
+    .btn-row > button {
+        padding: 12px 14px;
+        font-size: 16px;
+    }
+
+    /* リアルタイム出力：高さを確保して“読める”に寄せる */
+    .terminal {
+        font-size: 14px;
+        line-height: 1.35;
+        padding: 10px;
+        max-height: 45vh; /* スマホはここが命 */
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    /* 監視タブ：1列に落として読みやすく */
+    .monitor-grid {
+        grid-template-columns: 1fr;
+        gap: 10px;
+    }
+
+    /* タブ：押しやすい高さに */
+    .tab-nav {
+        gap: 6px;
+    }
+    .tab-btn {
+        padding: 10px 10px;
+        font-size: 14px;
+        min-height: 40px;
+    }
+}
+/* ===== Esc ボタン：送信と同形・色違い ===== */
+.command-input .esc-btn,
+button.esc-btn {
+    padding: 12px 14px;
+    border-radius: 12px;
+    border: 3px solid rgba(40, 40, 40, 0.55);
+
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.25), transparent),
+        linear-gradient(180deg, #e6e6e6, #cfcfcf);
+
+    color: #2a1b12;
+    font-weight: 900;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+
+    box-shadow:
+        0 10px 0 rgba(90, 90, 90, 0.55),
+        0 14px 22px rgba(0, 0, 0, 0.35);
+
+    text-shadow: none;
+}
+
+.command-input .esc-btn:active,
+button.esc-btn:active {
+    transform: translateY(8px);
+    box-shadow:
+        0 2px 0 rgba(90, 90, 90, 0.55),
+        0 8px 14px rgba(0, 0, 0, 0.35);
+}
+/* ===== セクション見出し：前に出す ===== */
+section h2 {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.45), transparent),
+        linear-gradient(180deg, #f3e6c9, #e6d1a3);
+
+    border: 2px solid rgba(120, 70, 25, 0.55);
+    border-radius: 10px;
+
+    padding: 8px 12px;
+    margin-bottom: 12px;
+
+    box-shadow:
+        0 6px 14px rgba(0, 0, 0, 0.35),
+        inset 0 1px 0 rgba(255, 255, 255, 0.5);
+
+    position: relative;
+    z-index: 2;
+}
+
+/* ダイヤマークを強調 */
+section h2::before {
+    color: #b11f2a;
+    font-size: 1.1em;
+}
+.monitor-grid,
+.dashboard {
+    position: relative;
+    z-index: 1;
 }

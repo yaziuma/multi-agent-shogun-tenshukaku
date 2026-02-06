@@ -133,6 +133,34 @@ class TmuxBridge:
         except (subprocess.CalledProcessError, FileNotFoundError):
             return False
 
+    def send_special_key(self, key: str) -> bool:
+        """
+        Send a special key to the shogun pane (shogun:0.0).
+
+        Args:
+            key: Special key name (e.g., "Escape")
+
+        Returns:
+            True if successful, False otherwise
+
+        Raises:
+            ValueError: If the key is not in the allowlist
+        """
+        # allowlist: 将来拡張可能
+        ALLOWED_KEYS = {"Escape"}
+        if key not in ALLOWED_KEYS:
+            raise ValueError(f"Key '{key}' is not allowed. Allowed keys: {ALLOWED_KEYS}")
+
+        target = "shogun:0.0"
+        try:
+            subprocess.run(
+                ["tmux", "send-keys", "-t", target, key],
+                check=True,
+            )
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+
     def read_dashboard(self) -> str:
         """
         Read the contents of dashboard.md.

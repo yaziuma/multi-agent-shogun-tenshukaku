@@ -17,7 +17,10 @@
             <form hx-post="/api/command" hx-target="#command-result" hx-swap="innerHTML"
                   hx-on::after-request="if(event.detail.successful) this.reset()">
                 <textarea name="instruction" rows="5" placeholder="将軍に話しかける..."></textarea>
-                <button type="submit">送信</button>
+                <div class="btn-row">
+                    <button type="submit">送信</button>
+                    <button type="button" id="esc-btn" class="esc-btn">Esc</button>
+                </div>
             </form>
             <div id="command-result"></div>
         </section>
@@ -31,11 +34,13 @@
 
     <!-- タブ2: 監視 -->
     <div id="tab-monitor" class="tab-content">
-        <h2>全ペイン監視</h2>
+        <section class="monitor-section">
+        <h2>👁️ 全ペイン監視</h2>
         <div id="monitor-grid" class="monitor-grid">
             <!-- WebSocketで動的に生成 -->
             <div class="monitor-loading">接続中...</div>
         </div>
+        </section>
     </div>
 
     <!-- タブ3: 戦況 -->
@@ -75,6 +80,40 @@ document.querySelector('textarea[name="instruction"]').addEventListener('keydown
     if (e.ctrlKey && e.key === 'Enter') {
         e.preventDefault();
         e.target.closest('form').requestSubmit();
+    }
+});
+
+// Esc キー送信関数
+function sendEscapeKey() {
+    if (!confirm('Escキーを将軍に送信しますか？')) {
+        return;
+    }
+    fetch('/api/special-key', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({key: 'Escape'})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'sent') {
+            document.getElementById('command-result').innerHTML = '<p style="color:green;">Escキーを送信しました</p>';
+        } else {
+            document.getElementById('command-result').innerHTML = '<p style="color:red;">送信失敗: ' + (data.message || 'Unknown error') + '</p>';
+        }
+    })
+    .catch(err => {
+        document.getElementById('command-result').innerHTML = '<p style="color:red;">送信エラー: ' + err + '</p>';
+    });
+}
+
+// Esc ボタンクリック
+document.getElementById('esc-btn').addEventListener('click', sendEscapeKey);
+
+// ブラウザでEscキー押下時
+document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape') {
+        e.preventDefault();
+        sendEscapeKey();
     }
 });
 
