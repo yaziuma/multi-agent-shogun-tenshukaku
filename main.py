@@ -1,7 +1,8 @@
-from fastapi import FastAPI, Request, WebSocket, Form
+from fastapi import FastAPI, Request, WebSocket, Form, HTTPException
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
+from pydantic import BaseModel
 import uvicorn
 import yaml
 from pathlib import Path
@@ -39,6 +40,10 @@ async def get_dashboard():
         return f"<pre>Error: {e}</pre>"
 
 
+class SpecialKeyRequest(BaseModel):
+    key: str
+
+
 @app.post("/api/command")
 async def send_command(instruction: str = Form(...)):
     """
@@ -57,6 +62,33 @@ async def send_command(instruction: str = Form(...)):
             return {"status": "sent"}
         else:
             return {"status": "error", "message": "Failed to send to shogun pane"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
+@app.post("/api/special-key")
+async def send_special_key(request: SpecialKeyRequest):
+    """
+    Send a special key to the shogun pane.
+
+    Args:
+        request: JSON body with "key" field (e.g., {"key": "Escape"})
+
+    Returns:
+        Status of key submission
+
+    Raises:
+        HTTPException: 400 if the key is not allowed
+    """
+    try:
+        bridge = TmuxBridge()
+        success = bridge.send_special_key(request.key)
+        if success:
+            return {"status": "sent", "key": request.key}
+        else:
+            return {"status": "error", "message": "Failed to send key to shogun pane"}
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         return {"status": "error", "message": str(e)}
 

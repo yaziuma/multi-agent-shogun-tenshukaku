@@ -29,6 +29,7 @@ def mock_bridge():
             },
         ]
         instance.send_to_shogun.return_value = True
+        instance.send_special_key.return_value = True
         yield instance
 
 
@@ -150,3 +151,46 @@ class TestHistoryAPI:
         response = client.get("/api/history")
         assert response.status_code == 200
         assert "Error" in response.text
+
+
+class TestSpecialKeyAPI:
+    """POST /api/special-key のテスト"""
+
+    def test_special_key_escape_returns_200(self, client, mock_bridge):
+        """Escapeキー送信が200を返す"""
+        response = client.post("/api/special-key", json={"key": "Escape"})
+        assert response.status_code == 200
+
+    def test_special_key_calls_send_special_key(self, client, mock_bridge):
+        """send_special_key() が Escape で呼ばれる"""
+        response = client.post("/api/special-key", json={"key": "Escape"})
+        mock_bridge.send_special_key.assert_called_once_with("Escape")
+
+    def test_special_key_returns_sent_status(self, client, mock_bridge):
+        """レスポンスに status: sent と key が含まれる"""
+        response = client.post("/api/special-key", json={"key": "Escape"})
+        data = response.json()
+        assert data["status"] == "sent"
+        assert data["key"] == "Escape"
+
+    def test_special_key_with_disallowed_key(self, client, mock_bridge):
+        """allowlist外のキー（Delete）は400エラー"""
+        mock_bridge.send_special_key.side_effect = ValueError(
+            "Key 'Delete' is not allowed. Allowed keys: {'Escape'}"
+        )
+        response = client.post("/api/special-key", json={"key": "Delete"})
+        assert response.status_code == 400
+        assert "not allowed" in response.json()["detail"]
+
+    def test_special_key_requires_key(self, client, mock_bridge):
+        """key が必須（422 バリデーションエラー）"""
+        response = client.post("/api/special-key", json={})
+        assert response.status_code == 422
+
+    def test_special_key_with_send_failure(self, client, mock_bridge):
+        """send_special_key() が False を返した場合"""
+        mock_bridge.send_special_key.return_value = False
+        response = client.post("/api/special-key", json={"key": "Escape"})
+        data = response.json()
+        assert data["status"] == "error"
+        assert "message" in data
