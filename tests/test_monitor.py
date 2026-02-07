@@ -1,10 +1,11 @@
 """Tests for monitor WebSocket endpoint and capture_all_panes functionality."""
 
+from unittest.mock import AsyncMock, Mock, patch
+
 import pytest
-from unittest.mock import Mock, AsyncMock, patch
-from ws.tmux_bridge import TmuxBridge
+
 from ws.handlers import MonitorWebSocketHandler
-import json
+from ws.tmux_bridge import TmuxBridge
 
 
 class TestCaptureAllPanes:
@@ -108,57 +109,45 @@ class TestMonitorWebSocketHandler:
     """Test MonitorWebSocketHandler class."""
 
     @pytest.mark.asyncio
-    async def test_monitor_handler_sends_json(self):
-        """Test that MonitorWebSocketHandler sends JSON data."""
+    async def test_monitor_handler_with_broadcaster(self):
+        """Test that MonitorWebSocketHandler works with broadcaster pattern."""
         mock_websocket = AsyncMock()
+        mock_broadcaster = AsyncMock()
 
-        with patch("ws.handlers.TmuxBridge") as mock_bridge_class:
-            mock_bridge = Mock()
-            mock_bridge.capture_all_panes.return_value = [
-                {"agent_id": "karo", "pane_index": 0, "output": "test output"}
-            ]
-            mock_bridge_class.return_value = mock_bridge
+        handler = MonitorWebSocketHandler(mock_broadcaster)
 
-            handler = MonitorWebSocketHandler(mock_websocket)
+        # Mock receive_text to raise WebSocketDisconnect after subscribe
+        from fastapi import WebSocketDisconnect
 
-            # Mock asyncio.sleep to raise exception and exit loop
-            with patch("asyncio.sleep", side_effect=Exception("Stop loop")):
-                try:
-                    await handler.handle()
-                except Exception:
-                    pass
+        mock_websocket.receive_text.side_effect = WebSocketDisconnect()
 
-            # Verify websocket.accept was called
-            mock_websocket.accept.assert_called_once()
+        # Run handler
+        await handler.handle(mock_websocket)
 
-            # Verify send_text was called with JSON
-            assert mock_websocket.send_text.called
-            sent_data = mock_websocket.send_text.call_args[0][0]
-            parsed = json.loads(sent_data)
-            assert len(parsed) == 1
-            assert parsed[0]["agent_id"] == "karo"
-            assert parsed[0]["pane_index"] == 0
-            assert parsed[0]["output"] == "test output"
+        # Verify websocket.accept was called
+        mock_websocket.accept.assert_called_once()
+
+        # Verify subscribe/unsubscribe were called
+        mock_broadcaster.subscribe.assert_called_once_with(mock_websocket)
+        mock_broadcaster.unsubscribe.assert_called_once_with(mock_websocket)
 
     @pytest.mark.asyncio
     async def test_monitor_handler_handles_exception(self):
-        """Test that MonitorWebSocketHandler handles exceptions during data capture gracefully."""
+        """Test that MonitorWebSocketHandler handles exceptions gracefully."""
         mock_websocket = AsyncMock()
+        mock_broadcaster = AsyncMock()
 
-        with patch("ws.handlers.TmuxBridge") as mock_bridge_class:
-            mock_bridge = Mock()
-            # First call succeeds, second call raises exception
-            mock_bridge.capture_all_panes.side_effect = [
-                [{"agent_id": "karo", "pane_index": 0, "output": "test"}],
-                Exception("Capture failed")
-            ]
-            mock_bridge_class.return_value = mock_bridge
+        handler = MonitorWebSocketHandler(mock_broadcaster)
 
-            handler = MonitorWebSocketHandler(mock_websocket)
-            # Should not raise exception and exit gracefully
-            await handler.handle()
+        # Mock receive_text to raise a generic exception
+        mock_websocket.receive_text.side_effect = Exception("Connection error")
 
-            # Verify accept was called
-            mock_websocket.accept.assert_called_once()
-            # Verify send_text was called at least once (before exception)
-            assert mock_websocket.send_text.called
+        # Should not raise exception and exit gracefully
+        await handler.handle(mock_websocket)
+
+        # Verify accept was called
+        mock_websocket.accept.assert_called_once()
+
+        # Verify subscribe/unsubscribe were called
+        mock_broadcaster.subscribe.assert_called_once_with(mock_websocket)
+        mock_broadcaster.unsubscribe.assert_called_once_with(mock_websocket)

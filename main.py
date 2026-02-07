@@ -1,15 +1,73 @@
-from fastapi import FastAPI, Request, WebSocket, Form, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse
-from pydantic import BaseModel
+from contextlib import asynccontextmanager
+from pathlib import Path
+
 import uvicorn
 import yaml
-from pathlib import Path
-from ws.handlers import WebSocketHandler, MonitorWebSocketHandler
+from fastapi import FastAPI, Form, HTTPException, Request, WebSocket
+from fastapi.responses import HTMLResponse
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
+
+from ws.broadcasters import AdaptivePoller, MonitorBroadcaster, ShogunBroadcaster
+from ws.handlers import MonitorWebSocketHandler, WebSocketHandler
+from ws.runtime import TmuxRuntime
 from ws.tmux_bridge import TmuxBridge
 
-app = FastAPI(title="Shogun Web Panel")
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Application lifespan: startup and shutdown hooks."""
+    # Startup
+    settings = load_settings()
+    tmux_bridge = TmuxBridge()
+    runtime = TmuxRuntime(
+        max_workers=settings.get("runtime", {}).get("thread_pool_workers", 2)
+    )
+
+    # Create adaptive pollers from settings
+    monitor_settings = settings.get("monitor", {})
+    monitor_poller = AdaptivePoller(
+        base_interval=monitor_settings.get("base_interval_ms", 5000) / 1000,
+        max_interval=monitor_settings.get("max_interval_ms", 10000) / 1000,
+        no_change_threshold=monitor_settings.get("no_change_threshold", 2),
+    )
+
+    shogun_settings = settings.get("shogun", {})
+    shogun_poller = AdaptivePoller(
+        base_interval=shogun_settings.get("base_interval_ms", 1000) / 1000,
+        max_interval=shogun_settings.get("max_interval_ms", 3000) / 1000,
+        no_change_threshold=shogun_settings.get("no_change_threshold", 2),
+    )
+
+    # Create broadcasters
+    monitor_broadcaster = MonitorBroadcaster(
+        tmux=tmux_bridge, runtime=runtime, poller=monitor_poller
+    )
+    shogun_broadcaster = ShogunBroadcaster(
+        tmux=tmux_bridge, runtime=runtime, poller=shogun_poller
+    )
+
+    # Start broadcasters
+    await monitor_broadcaster.start()
+    await shogun_broadcaster.start()
+
+    # Store in app.state for access in handlers/APIs
+    app.state.tmux_bridge = tmux_bridge
+    app.state.runtime = runtime
+    app.state.monitor_broadcaster = monitor_broadcaster
+    app.state.shogun_broadcaster = shogun_broadcaster
+    app.state.settings = settings
+
+    yield
+
+    # Shutdown
+    await monitor_broadcaster.stop()
+    await shogun_broadcaster.stop()
+    runtime.shutdown()
+
+
+app = FastAPI(title="Shogun Web Panel", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
 
@@ -18,28 +76,22 @@ templates = Jinja2Templates(directory="templates")
 async def index(request: Request):
     """Render main dashboard page."""
     try:
-        bridge = TmuxBridge()
+        bridge = request.app.state.tmux_bridge
         commands = bridge.read_command_history()
         commands.reverse()
     except Exception:
         commands = []
 
-    # Load monitor interval from settings (default: 5000ms)
-    settings = load_settings()
-    monitor_interval = settings.get("monitor", {}).get("update_interval_ms", 5000)
-
-    return templates.TemplateResponse("index.html", {
-        "request": request,
-        "commands": commands,
-        "monitor_interval": monitor_interval
-    })
+    return templates.TemplateResponse(
+        "index.html", {"request": request, "commands": commands}
+    )
 
 
 @app.get("/api/dashboard", response_class=HTMLResponse)
-async def get_dashboard():
+async def get_dashboard(request: Request):
     """Return dashboard.md content."""
     try:
-        bridge = TmuxBridge()
+        bridge = request.app.state.tmux_bridge
         content = bridge.read_dashboard()
         return f"<pre>{content}</pre>"
     except Exception as e:
@@ -51,7 +103,7 @@ class SpecialKeyRequest(BaseModel):
 
 
 @app.post("/api/command")
-async def send_command(instruction: str = Form(...)):
+async def send_command(request: Request, instruction: str = Form(...)):
     """
     Send command directly to shogun pane via tmux send-keys.
 
@@ -62,7 +114,7 @@ async def send_command(instruction: str = Form(...)):
         Status of command submission
     """
     try:
-        bridge = TmuxBridge()
+        bridge = request.app.state.tmux_bridge
         success = bridge.send_to_shogun(instruction)
         if success:
             return {"status": "sent"}
@@ -73,12 +125,12 @@ async def send_command(instruction: str = Form(...)):
 
 
 @app.post("/api/special-key")
-async def send_special_key(request: SpecialKeyRequest):
+async def send_special_key(request: Request, body: SpecialKeyRequest):
     """
     Send a special key to the shogun pane.
 
     Args:
-        request: JSON body with "key" field (e.g., {"key": "Escape"})
+        body: JSON body with "key" field (e.g., {"key": "Escape"})
 
     Returns:
         Status of key submission
@@ -87,14 +139,14 @@ async def send_special_key(request: SpecialKeyRequest):
         HTTPException: 400 if the key is not allowed
     """
     try:
-        bridge = TmuxBridge()
-        success = bridge.send_special_key(request.key)
+        bridge = request.app.state.tmux_bridge
+        success = bridge.send_special_key(body.key)
         if success:
-            return {"status": "sent", "key": request.key}
+            return {"status": "sent", "key": body.key}
         else:
             return {"status": "error", "message": "Failed to send key to shogun pane"}
     except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
@@ -103,29 +155,28 @@ async def send_special_key(request: SpecialKeyRequest):
 async def get_history(request: Request):
     """Return command history as HTML."""
     try:
-        bridge = TmuxBridge()
+        bridge = request.app.state.tmux_bridge
         commands = bridge.read_command_history()
         commands.reverse()  # 最新順
-        return templates.TemplateResponse("partials/history.html", {
-            "request": request,
-            "commands": commands
-        })
+        return templates.TemplateResponse(
+            "partials/history.html", {"request": request, "commands": commands}
+        )
     except Exception as e:
         return HTMLResponse(f"<pre>Error: {e}</pre>")
 
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
-    """WebSocket endpoint for real-time tmux output updates."""
-    handler = WebSocketHandler(websocket)
-    await handler.handle()
+    """WebSocket endpoint for real-time shogun pane output."""
+    handler = WebSocketHandler(app.state.shogun_broadcaster)
+    await handler.handle(websocket)
 
 
 @app.websocket("/ws/monitor")
 async def monitor_websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for monitoring all multiagent panes."""
-    handler = MonitorWebSocketHandler(websocket)
-    await handler.handle()
+    handler = MonitorWebSocketHandler(app.state.monitor_broadcaster)
+    await handler.handle(websocket)
 
 
 def load_settings():

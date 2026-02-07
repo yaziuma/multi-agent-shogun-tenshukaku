@@ -168,17 +168,26 @@ class TmuxBridge:
         except (subprocess.CalledProcessError, FileNotFoundError):
             return False
 
-    def read_dashboard(self) -> str:
+    def read_dashboard(self, cache=None) -> str:
         """
         Read the contents of dashboard.md.
+
+        Args:
+            cache: Optional DashboardCache instance for mtime-based caching
 
         Returns:
             Dashboard contents as string, or error message if not found
         """
         dashboard_path = self.bakuhu_base / "dashboard.md"
-        if dashboard_path.exists():
-            return dashboard_path.read_text()
-        return "Dashboard not found"
+        if not dashboard_path.exists():
+            return "Dashboard not found"
+
+        # Use cache if provided
+        if cache is not None:
+            return cache.read()
+
+        # Fallback to direct read
+        return dashboard_path.read_text()
 
     def read_command_history(self) -> list:
         """
