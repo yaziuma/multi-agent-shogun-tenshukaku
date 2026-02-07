@@ -15,9 +15,10 @@ import yaml
 
 # Claude Code プロンプト行除去パターン
 _PROMPT_PATTERNS = re.compile(
-    r"^(\s*[─]{3,}\s*|"  # 区切り線（─が3文字以上）
-    r"\s*❯.*|"  # プロンプト行
-    r".*⏵.*)$"  # ステータス行
+    r"^(\s*[─]{20,}\s*|"  # 区切り線（─が20文字以上の連続のみ）
+    r"\s*❯\s*$|"  # 空プロンプト行のみ（❯+空白のみ、テキストあれば残す）
+    r".*⏵.*|"  # ステータス行（⏵を含む行）
+    r"\s*[✢✻✽].*)$"  # ヒント行（✢✻✽で始まる行）
 )
 
 
@@ -26,10 +27,14 @@ def _clean_output(text: str) -> str:
     Remove Claude Code prompt lines from tmux output.
 
     Removes:
-    - Separator lines (─ repeating 3+ times)
-    - Prompt lines (containing ❯)
+    - Separator lines (─ repeating 20+ times)
+    - Empty prompt lines (❯ with no text after)
     - Status lines (containing ⏵)
+    - Hint lines (starting with ✢✻✽)
     - Trailing empty lines
+
+    Preserves:
+    - User input lines (❯ followed by text)
 
     Args:
         text: Raw tmux capture output

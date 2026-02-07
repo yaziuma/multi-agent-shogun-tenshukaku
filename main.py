@@ -82,8 +82,13 @@ async def index(request: Request):
     except Exception:
         commands = []
 
+    # Get UI settings
+    settings = request.app.state.settings
+    user_input_color = settings.get("ui", {}).get("user_input_color", "#4FC3F7")
+
     return templates.TemplateResponse(
-        "index.html", {"request": request, "commands": commands}
+        "index.html",
+        {"request": request, "commands": commands, "user_input_color": user_input_color},
     )
 
 
