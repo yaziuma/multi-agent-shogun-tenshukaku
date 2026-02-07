@@ -22,3 +22,6 @@ shogun:
   base_interval_ms: 1000
   max_interval_ms: 3000
   no_change_threshold: 2
+
+ui:
+  user_input_color: "#4FC3F7"

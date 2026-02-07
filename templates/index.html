@@ -63,6 +63,27 @@
 </div>
 
 <script>
+// 殿の入力行の色（足軽1がテンプレート変数で渡す、デフォルトはライトブルー）
+const userInputColor = "{{ user_input_color|default('#4FC3F7') }}";
+
+// XSS防止: HTMLエスケープ関数
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+// 殿の入力行（❯）を色分けする関数
+function colorizeOutput(text, color) {
+    return text.split('\n').map(line => {
+        if (line.match(/^\s*❯\s+\S/)) {
+            // 殿の入力行: ❯の後にテキストがある行
+            return '<span style="color: ' + color + '">' + escapeHtml(line) + '</span>';
+        }
+        return escapeHtml(line);
+    }).join('\n');
+}
+
 document.querySelectorAll('.tab-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
         e.preventDefault();
@@ -146,7 +167,7 @@ ws.onmessage = (e) => {
     if (msg.output !== undefined) {
         const el = document.getElementById('shogun-output');
         const wasAtBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 50;
-        el.innerHTML = '<pre>' + msg.output + '</pre>';
+        el.innerHTML = '<pre>' + colorizeOutput(msg.output, userInputColor) + '</pre>';
         // ユーザーが最下部付近にいる場合のみ自動スクロール
         if (wasAtBottom) {
             el.scrollTop = el.scrollHeight;
@@ -190,10 +211,11 @@ function renderMonitorPanes(panes) {
 
     grid.innerHTML = sortedPaneIds.map(paneId => {
         const output = panes[paneId];
+        const colorizedOutput = colorizeOutput(output, userInputColor);
         return `
             <div class="pane-card" data-pane-id="${paneId}">
                 <div class="pane-header">${paneId}</div>
-                <div class="pane-output"><pre>${output}</pre></div>
+                <div class="pane-output"><pre>${colorizedOutput}</pre></div>
             </div>
         `;
     }).join('');
