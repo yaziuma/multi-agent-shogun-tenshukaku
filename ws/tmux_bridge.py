@@ -5,12 +5,44 @@ This module provides integration between the web interface and tmux sessions,
 allowing remote control and monitoring of the multi-agent system.
 """
 
+import re
 import subprocess
 from datetime import datetime
 from pathlib import Path
 
 import libtmux
 import yaml
+
+# Claude Code プロンプト行除去パターン
+_PROMPT_PATTERNS = re.compile(
+    r"^(\s*[─]{3,}\s*|"  # 区切り線（─が3文字以上）
+    r"\s*❯.*|"  # プロンプト行
+    r".*⏵.*)$"  # ステータス行
+)
+
+
+def _clean_output(text: str) -> str:
+    """
+    Remove Claude Code prompt lines from tmux output.
+
+    Removes:
+    - Separator lines (─ repeating 3+ times)
+    - Prompt lines (containing ❯)
+    - Status lines (containing ⏵)
+    - Trailing empty lines
+
+    Args:
+        text: Raw tmux capture output
+
+    Returns:
+        Cleaned output with prompt lines removed
+    """
+    lines = text.split("\n")
+    cleaned = [line for line in lines if not _PROMPT_PATTERNS.match(line)]
+    # 末尾の空行をトリム
+    while cleaned and not cleaned[-1].strip():
+        cleaned.pop()
+    return "\n".join(cleaned)
 
 
 class TmuxBridge:
@@ -52,7 +84,7 @@ class TmuxBridge:
             pane = None
         if pane:
             captured = pane.capture_pane()
-            return "\n".join(captured[-lines:])
+            return _clean_output("\n".join(captured[-lines:]))
         return "Error: shogun pane not found"
 
     def capture_all_panes(self, lines: int = 20) -> list[dict]:
@@ -87,7 +119,7 @@ class TmuxBridge:
             # Capture pane output
             try:
                 captured = pane.capture_pane()
-                output = "\n".join(captured[-lines:])
+                output = _clean_output("\n".join(captured[-lines:]))
             except Exception:
                 output = "Error: failed to capture pane"
 

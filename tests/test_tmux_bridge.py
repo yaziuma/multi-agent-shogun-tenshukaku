@@ -272,3 +272,75 @@ def test_tmux_settings_defaults_when_missing(mock_tmux_server, tmp_path):
     assert bridge.shogun_session == "shogun"
     assert bridge.multiagent_session == "multiagent"
     assert bridge.shogun_pane == "0.0"
+
+
+# ========================================
+# Test: _clean_output()
+# ========================================
+
+
+class TestCleanOutput:
+    """Tests for _clean_output() prompt line removal."""
+
+    def test_removes_separator_lines(self):
+        """区切り線（─の連続）が除去されること"""
+        from ws.tmux_bridge import _clean_output
+
+        text = "Line 1\n─────────────────────\nLine 2"
+        result = _clean_output(text)
+        assert result == "Line 1\nLine 2"
+
+    def test_removes_prompt_lines(self):
+        """プロンプト行（❯）が除去されること"""
+        from ws.tmux_bridge import _clean_output
+
+        text = "Output line\n❯ prompt here\nMore output"
+        result = _clean_output(text)
+        assert result == "Output line\nMore output"
+
+    def test_removes_status_lines(self):
+        """ステータス行（⏵を含む）が除去されること"""
+        from ws.tmux_bridge import _clean_output
+
+        text = "Working...\n  ⏵⏵ bypass permissions on\nDone"
+        result = _clean_output(text)
+        assert result == "Working...\nDone"
+
+    def test_preserves_normal_output(self):
+        """通常の出力（日本語テキスト、コードブロック等）が保持されること"""
+        from ws.tmux_bridge import _clean_output
+
+        text = "日本語テキスト\ndef foo():\n    return 42\n結果: 完了"
+        result = _clean_output(text)
+        assert result == text
+
+    def test_handles_empty_input(self):
+        """空の入力でエラーにならないこと"""
+        from ws.tmux_bridge import _clean_output
+
+        result = _clean_output("")
+        assert result == ""
+
+    def test_trims_trailing_empty_lines(self):
+        """末尾の空行がトリムされること"""
+        from ws.tmux_bridge import _clean_output
+
+        text = "Line 1\nLine 2\n\n\n"
+        result = _clean_output(text)
+        assert result == "Line 1\nLine 2"
+
+    def test_complex_prompt_removal(self):
+        """複数のプロンプト要素が混在する場合も正しく除去されること"""
+        from ws.tmux_bridge import _clean_output
+
+        text = (
+            "Output line 1\n"
+            "─────────────────────\n"
+            "❯ user prompt\n"
+            "  ⏵⏵ bypass permissions on (shift+tab to cycle)\n"
+            "Output line 2\n"
+            "─────────────────────\n"
+            "\n"
+        )
+        result = _clean_output(text)
+        assert result == "Output line 1\nOutput line 2"
