@@ -1,53 +1,59 @@
-from fastapi import WebSocket
-import asyncio
-import json
-from .tmux_bridge import TmuxBridge
+"""WebSocket handlers for real-time updates."""
+
+import logging
+
+from fastapi import WebSocket, WebSocketDisconnect
+
+from .broadcasters import MonitorBroadcaster, ShogunBroadcaster
+
+logger = logging.getLogger(__name__)
 
 
 class WebSocketHandler:
-    """WebSocket handler for real-time updates from tmux panes."""
+    """WebSocket handler for shogun pane real-time updates."""
 
-    def __init__(self, websocket: WebSocket):
-        self.websocket = websocket
-        self.tmux = TmuxBridge()
+    def __init__(self, broadcaster: ShogunBroadcaster) -> None:
+        self.broadcaster = broadcaster
 
-    async def handle(self) -> None:
+    async def handle(self, ws: WebSocket) -> None:
         """
-        Accept WebSocket connection and stream tmux output.
+        Handle WebSocket connection for shogun pane output.
 
-        Sends shogun pane output every second until connection closes.
+        Subscribes the client to the broadcaster and keeps connection alive.
         """
-        await self.websocket.accept()
+        await ws.accept()
+        await self.broadcaster.subscribe(ws)
         try:
             while True:
-                output = self.tmux.capture_shogun_pane()
-                await self.websocket.send_text(output)
-                await asyncio.sleep(1)
+                await ws.receive_text()  # Keep-alive (client messages)
+        except WebSocketDisconnect:
+            pass  # Normal disconnection
         except Exception:
-            # Connection closed or error occurred
-            pass
+            logger.error("WebSocket error in shogun handler", exc_info=True)
+        finally:
+            await self.broadcaster.unsubscribe(ws)
 
 
 class MonitorWebSocketHandler:
-    """WebSocket handler for monitoring all multiagent panes."""
+    """WebSocket handler for all multiagent panes monitoring."""
 
-    def __init__(self, websocket: WebSocket):
-        self.websocket = websocket
-        self.tmux = TmuxBridge()
+    def __init__(self, broadcaster: MonitorBroadcaster) -> None:
+        self.broadcaster = broadcaster
 
-    async def handle(self) -> None:
+    async def handle(self, ws: WebSocket) -> None:
         """
-        Accept WebSocket connection and stream all panes output as JSON.
+        Handle WebSocket connection for all panes monitoring.
 
-        Sends JSON array of all panes every second until connection closes.
+        Subscribes the client to the broadcaster and keeps connection alive.
         """
-        await self.websocket.accept()
+        await ws.accept()
+        await self.broadcaster.subscribe(ws)
         try:
             while True:
-                panes_data = self.tmux.capture_all_panes()
-                json_str = json.dumps(panes_data, ensure_ascii=False)
-                await self.websocket.send_text(json_str)
-                await asyncio.sleep(1)
+                await ws.receive_text()  # Keep-alive (client messages)
+        except WebSocketDisconnect:
+            pass  # Normal disconnection
         except Exception:
-            # Connection closed or error occurred
-            pass
+            logger.error("WebSocket error in monitor handler", exc_info=True)
+        finally:
+            await self.broadcaster.unsubscribe(ws)

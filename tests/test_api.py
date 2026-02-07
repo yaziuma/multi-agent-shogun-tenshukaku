@@ -3,42 +3,46 @@ FastAPI エンドポイントのテスト
 TmuxBridge をモックしてテストを実行
 """
 
+from unittest.mock import MagicMock
+
 import pytest
-from unittest.mock import patch, MagicMock
 from fastapi.testclient import TestClient
 
 
 @pytest.fixture
 def mock_bridge():
     """TmuxBridge のモック（全テストで共通使用）"""
-    with patch("main.TmuxBridge") as MockBridge:
-        instance = MockBridge.return_value
-        instance.read_dashboard.return_value = "# Test Dashboard\n\n将軍の指示を待つ"
-        instance.read_command_history.return_value = [
-            {
-                "cmd_id": "cmd_001",
-                "status": "done",
-                "timestamp": "2026-02-06T00:00:00",
-                "instruction": "test command 1",
-            },
-            {
-                "cmd_id": "cmd_002",
-                "status": "pending",
-                "timestamp": "2026-02-06T00:01:00",
-                "instruction": "test command 2",
-            },
-        ]
-        instance.send_to_shogun.return_value = True
-        instance.send_special_key.return_value = True
-        yield instance
+    instance = MagicMock()
+    instance.read_dashboard.return_value = "# Test Dashboard\n\n将軍の指示を待つ"
+    instance.read_command_history.return_value = [
+        {
+            "cmd_id": "cmd_001",
+            "status": "done",
+            "timestamp": "2026-02-06T00:00:00",
+            "instruction": "test command 1",
+        },
+        {
+            "cmd_id": "cmd_002",
+            "status": "pending",
+            "timestamp": "2026-02-06T00:01:00",
+            "instruction": "test command 2",
+        },
+    ]
+    instance.send_to_shogun.return_value = True
+    instance.send_special_key.return_value = True
+    return instance
 
 
 @pytest.fixture
 def client(mock_bridge):
-    """FastAPI TestClient"""
+    """FastAPI TestClient with mocked app.state"""
     from main import app
 
-    return TestClient(app)
+    # Create TestClient (this will trigger lifespan)
+    with TestClient(app) as test_client:
+        # Override app.state.tmux_bridge after lifespan
+        app.state.tmux_bridge = mock_bridge
+        yield test_client
 
 
 class TestTopPage:
@@ -55,29 +59,6 @@ class TestTopPage:
         response = client.get("/")
         assert b"<!DOCTYPE html>" in response.content or b"<html" in response.content
 
-    def test_index_with_custom_monitor_interval(self, client):
-        """カスタム monitor_interval が HTML に反映される"""
-        with patch("main.load_settings") as mock_load:
-            mock_load.return_value = {
-                "monitor": {"update_interval_ms": 7000},
-                "server": {"host": "0.0.0.0", "port": 30000},
-            }
-            response = client.get("/")
-            assert response.status_code == 200
-            # テンプレート変数が展開されて7000が含まれるか確認
-            assert b"7000" in response.content
-
-    def test_index_with_default_monitor_interval(self, client):
-        """monitor セクションがない場合デフォルト値5000が使用される"""
-        with patch("main.load_settings") as mock_load:
-            mock_load.return_value = {
-                "server": {"host": "0.0.0.0", "port": 30000},
-            }
-            response = client.get("/")
-            assert response.status_code == 200
-            # デフォルト値5000が含まれるか確認
-            assert b"5000" in response.content
-
 
 class TestDashboardAPI:
     """GET /api/dashboard のテスト"""
@@ -89,7 +70,7 @@ class TestDashboardAPI:
 
     def test_dashboard_calls_read_dashboard(self, client, mock_bridge):
         """read_dashboard() が呼ばれる"""
-        response = client.get("/api/dashboard")
+        client.get("/api/dashboard")
         mock_bridge.read_dashboard.assert_called_once()
 
     def test_dashboard_returns_content(self, client, mock_bridge):
@@ -116,7 +97,7 @@ class TestCommandAPI:
 
     def test_command_calls_send_to_shogun(self, client, mock_bridge):
         """send_to_shogun() が instruction をそのまま渡して呼ばれる"""
-        response = client.post("/api/command", data={"instruction": "deploy system"})
+        client.post("/api/command", data={"instruction": "deploy system"})
         mock_bridge.send_to_shogun.assert_called_once_with("deploy system")
 
     def test_command_returns_sent_status(self, client, mock_bridge):
@@ -158,7 +139,7 @@ class TestHistoryAPI:
 
     def test_history_calls_read_command_history(self, client, mock_bridge):
         """read_command_history() が呼ばれる"""
-        response = client.get("/api/history")
+        client.get("/api/history")
         mock_bridge.read_command_history.assert_called_once()
 
     def test_history_returns_html(self, client, mock_bridge):
@@ -186,7 +167,7 @@ class TestSpecialKeyAPI:
 
     def test_special_key_calls_send_special_key(self, client, mock_bridge):
         """send_special_key() が Escape で呼ばれる"""
-        response = client.post("/api/special-key", json={"key": "Escape"})
+        client.post("/api/special-key", json={"key": "Escape"})
         mock_bridge.send_special_key.assert_called_once_with("Escape")
 
     def test_special_key_returns_sent_status(self, client, mock_bridge):

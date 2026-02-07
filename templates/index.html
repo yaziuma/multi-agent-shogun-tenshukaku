@@ -139,50 +139,69 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// WebSocket でリアルタイム出力を受信
+// WebSocket でリアルタイム出力を受信（指揮タブ）
 const ws = new WebSocket(`ws://${location.host}/ws`);
 ws.onmessage = (e) => {
-    const el = document.getElementById('shogun-output');
-    const wasAtBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 50;
-    el.innerHTML = '<pre>' + e.data + '</pre>';
-    // ユーザーが最下部付近にいる場合のみ自動スクロール
-    if (wasAtBottom) {
-        el.scrollTop = el.scrollHeight;
+    const msg = JSON.parse(e.data);
+    if (msg.output !== undefined) {
+        const el = document.getElementById('shogun-output');
+        const wasAtBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 50;
+        el.innerHTML = '<pre>' + msg.output + '</pre>';
+        // ユーザーが最下部付近にいる場合のみ自動スクロール
+        if (wasAtBottom) {
+            el.scrollTop = el.scrollHeight;
+        }
     }
 };
 ws.onclose = () => {
     document.getElementById('shogun-output').innerHTML = '<pre>接続が切断されました。ページをリロードしてください。</pre>';
 };
 
-// 監視タブ: 全ペインリアルタイム表示（throttling設定で負荷軽減）
-let lastMonitorUpdate = 0;
-const MONITOR_UPDATE_INTERVAL = {{ monitor_interval }}; // 設定値による更新間隔（指揮タブはリアルタイム）
+// 監視タブ: 全ペインリアルタイム表示（差分マージ対応）
+const monitorPanes = {}; // ペイン出力のローカルキャッシュ
 
 const monitorWs = new WebSocket(`ws://${location.host}/ws/monitor`);
 monitorWs.onmessage = (e) => {
-    const now = Date.now();
-    if (now - lastMonitorUpdate < MONITOR_UPDATE_INTERVAL) {
-        return; // 前回更新から3秒経過していなければスキップ（負荷軽減）
+    const msg = JSON.parse(e.data);
+    if (msg.updates) {
+        // 差分マージ: 変更があったpaneのみ更新
+        Object.entries(msg.updates).forEach(([paneId, output]) => {
+            monitorPanes[paneId] = output;
+        });
+        renderMonitorPanes(monitorPanes);
     }
-    lastMonitorUpdate = now;
-
-    const panes = JSON.parse(e.data);
-    const grid = document.getElementById('monitor-grid');
-    if (!grid) return;
-    grid.innerHTML = panes.map(p => `
-        <div class="pane-card">
-            <div class="pane-header">${p.agent_id}</div>
-            <div class="pane-output"><pre>${p.output}</pre></div>
-        </div>
-    `).join('');
-    // 各カードの自動スクロール
-    grid.querySelectorAll('.pane-output').forEach(el => {
-        el.scrollTop = el.scrollHeight;
-    });
 };
 monitorWs.onclose = () => {
     const grid = document.getElementById('monitor-grid');
     if (grid) grid.innerHTML = '<div class="monitor-loading">接続が切断されました。ページをリロードしてください。</div>';
 };
+
+// ペイン描画関数
+function renderMonitorPanes(panes) {
+    const grid = document.getElementById('monitor-grid');
+    if (!grid) return;
+
+    // ペインIDでソートして安定した表示順を維持
+    const sortedPaneIds = Object.keys(panes).sort((a, b) => {
+        const numA = parseInt(a.replace(/\D/g, ''), 10) || 0;
+        const numB = parseInt(b.replace(/\D/g, ''), 10) || 0;
+        return numA - numB;
+    });
+
+    grid.innerHTML = sortedPaneIds.map(paneId => {
+        const output = panes[paneId];
+        return `
+            <div class="pane-card" data-pane-id="${paneId}">
+                <div class="pane-header">${paneId}</div>
+                <div class="pane-output"><pre>${output}</pre></div>
+            </div>
+        `;
+    }).join('');
+
+    // 各カードの自動スクロール
+    grid.querySelectorAll('.pane-output').forEach(el => {
+        el.scrollTop = el.scrollHeight;
+    });
+}
 </script>
 {% endblock %}
