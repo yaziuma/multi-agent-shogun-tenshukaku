@@ -102,12 +102,25 @@ bakuhu:
   base_path: "/path/to/multi-agent-bakuhu"
 
 tmux:
-  shogun_session: "shogun"          # 将軍tmuxセッション名
-  multiagent_session: "multiagent"  # マルチエージェントtmuxセッション名
-  shogun_pane: "0.0"                # 将軍ペインインデックス
+  shogun_session: "shogun"
+  multiagent_session: "multiagent"
+  shogun_pane: "0.0"
+
+runtime:
+  thread_pool_workers: 2
 
 monitor:
-  update_interval_ms: 5000  # 監視タブの更新間隔（ミリ秒）
+  base_interval_ms: 5000
+  max_interval_ms: 10000
+  no_change_threshold: 2
+
+shogun:
+  base_interval_ms: 1000
+  max_interval_ms: 3000
+  no_change_threshold: 2
+
+ui:
+  user_input_color: "#4FC3F7"
 ```
 
 ### 起動
@@ -115,6 +128,9 @@ monitor:
 ```bash
 # 起動スクリプト使用（推奨 — プロセス管理・ヘルスチェック付き）
 ./start.sh
+
+# 開発用再起動（キャッシュ完全削除 + ホットリロード）
+./restart.sh
 
 # 手動起動
 uv run uvicorn main:app --host 0.0.0.0 --port 30000
@@ -128,8 +144,12 @@ uv run uvicorn main:app --host 0.0.0.0 --port 30000
 multi-agent-shogun-tenshukaku/
 ├── main.py                  # FastAPIアプリケーション & APIルート
 ├── ws/
-│   ├── handlers.py          # WebSocketハンドラ（将軍 + 監視）
-│   └── tmux_bridge.py       # tmuxセッション操作レイヤー
+│   ├── broadcasters.py     # ブロードキャストマネージャ（将軍 + 監視）
+│   ├── dashboard_cache.py  # mtime ベースのダッシュボードキャッシュ
+│   ├── handlers.py         # WebSocketハンドラ（将軍 + 監視）
+│   ├── runtime.py          # スレッドプール + 非同期ロック
+│   ├── state.py            # ペイン状態の差分検出（sha1）
+│   └── tmux_bridge.py      # tmuxセッション操作レイヤー
 ├── templates/
 │   ├── base.html            # ベーステンプレート（ヘッダ、フッタ、アセット）
 │   ├── index.html           # メインSPA（4タブ + JS）
@@ -141,8 +161,10 @@ multi-agent-shogun-tenshukaku/
 │   └── settings.yaml        # サーバー・bakuhuパス・tmux・監視設定
 ├── tests/
 │   ├── test_api.py          # APIエンドポイントテスト
+│   ├── test_broadcasters.py # ブロードキャスターテスト
+│   ├── test_monitor.py      # 監視WebSocketテスト
 │   ├── test_tmux_bridge.py  # TmuxBridgeユニットテスト
-│   └── test_monitor.py      # 監視WebSocketテスト
+│   └── test_ws_core.py      # PaneState・DashboardCacheテスト
 ├── start.sh                 # 安全起動スクリプト
 ├── pyproject.toml           # プロジェクトメタデータ & 依存関係
 └── assets/

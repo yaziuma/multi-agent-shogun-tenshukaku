@@ -13,45 +13,90 @@ from pathlib import Path
 import libtmux
 import yaml
 
-# Claude Code プロンプト行除去パターン
-_PROMPT_PATTERNS = re.compile(
-    r"^(\s*[─]{20,}\s*|"  # 区切り線（─が20文字以上の連続のみ）
-    r"\s*❯\s*$|"  # 空プロンプト行のみ（❯+空白のみ、テキストあれば残す）
-    r".*⏵.*|"  # ステータス行（⏵を含む行）
-    r"\s*[✢✻✽].*)$"  # ヒント行（✢✻✽で始まる行）
-)
+# _clean_output constants
+_SEPARATOR_RE = re.compile(r"^─{20,}\s*$")
+_STATUS_RE = re.compile(r"^\s*⏵")
+_HINT_RE = re.compile(r"^\s*[✢✻✽]")
+UNIT_SEPARATOR = "\x1f"
+
+# sanitize_pane_text constants
+ANSI_RE = re.compile(r"\x1B(?:[@-Z\\-_]|\[[0-?]*[ -/]*[@-~])")
+MIN_RULE_LEN = 10
+RULE_RE = re.compile(rf"^\s*[-─━―]{{{MIN_RULE_LEN},}}\s*$")
 
 
-def _clean_output(text: str) -> str:
-    """
-    Remove Claude Code prompt lines from tmux output.
-
-    Removes:
-    - Separator lines (─ repeating 20+ times)
-    - Empty prompt lines (❯ with no text after)
-    - Status lines (containing ⏵)
-    - Hint lines (starting with ✢✻✽)
-    - Trailing empty lines
-
-    Preserves:
-    - User input lines (❯ followed by text)
+def sanitize_pane_text(s: str) -> str:
+    """tmux pane出力からANSIエスケープと罫線ノイズを除去する
 
     Args:
-        text: Raw tmux capture output
+        s: 生のtmux pane出力テキスト
 
     Returns:
-        Cleaned output with prompt lines removed
+        クリーニング済みのテキスト
     """
-    lines = text.split("\n")
-    cleaned = [line for line in lines if not _PROMPT_PATTERNS.match(line)]
-    # 末尾の空行をトリム
-    while cleaned and not cleaned[-1].strip():
-        cleaned.pop()
-    return "\n".join(cleaned)
+    # 1) ANSI除去
+    s = ANSI_RE.sub("", s)
+
+    # 2) 行単位で罫線除去（連続も潰す）
+    out = []
+    for line in s.splitlines():
+        if RULE_RE.match(line):
+            continue
+        out.append(line.rstrip())
+
+    # 3) 末尾空行トリム
+    while out and not out[-1].strip():
+        out.pop()
+
+    return "\n".join(out)
 
 
 class TmuxBridge:
     """Bridge between web interface and tmux multi-agent sessions."""
+
+    @staticmethod
+    def _clean_output(text: str) -> str:
+        """Clean tmux pane output: mark user input lines, remove noise.
+
+        Detects user input enclosed in separator line pairs (─×20+),
+        adds \\x1f marker to those lines, strips ❯ prefix, and removes
+        separator lines, status lines (⏵), and hint lines (✢✻✽).
+        """
+        lines = text.split("\n")
+
+        # Find separator line indices
+        sep_indices = [i for i, line in enumerate(lines) if _SEPARATOR_RE.match(line)]
+
+        # Pair separators: (0,1), (2,3), ...
+        user_input_lines: set[int] = set()
+        paired_seps: set[int] = set()
+
+        for k in range(0, len(sep_indices) - 1, 2):
+            start = sep_indices[k]
+            end = sep_indices[k + 1]
+            paired_seps.add(start)
+            paired_seps.add(end)
+            for j in range(start + 1, end):
+                user_input_lines.add(j)
+
+        result = []
+        for i, line in enumerate(lines):
+            if i in paired_seps:
+                continue
+            if _STATUS_RE.match(line):
+                continue
+            if _HINT_RE.match(line):
+                continue
+
+            if i in user_input_lines:
+                clean_line = line
+                if clean_line.startswith("❯ "):
+                    clean_line = clean_line[2:]
+                result.append(UNIT_SEPARATOR + clean_line)
+            else:
+                result.append(line)
+
+        return "\n".join(result)
 
     def __init__(self):
         """Initialize the tmux bridge and connect to the multiagent session."""
@@ -68,12 +113,12 @@ class TmuxBridge:
             session_name=self.multiagent_session, default=None
         )
 
-    def capture_shogun_pane(self, lines: int = 50) -> str:
+    def capture_shogun_pane(self, lines: int = 2000) -> str:
         """
-        Capture output from the shogun pane (shogun:0.0).
+        Capture output from the shogun pane (shogun:0.0) with scrollback.
 
         Args:
-            lines: Number of lines to capture (default: 50)
+            lines: Number of lines to capture from scrollback (default: 2000)
 
         Returns:
             Captured pane output as string, or error message if pane not found
@@ -88,16 +133,19 @@ class TmuxBridge:
         except Exception:
             pane = None
         if pane:
-            captured = pane.capture_pane()
-            return _clean_output("\n".join(captured[-lines:]))
+            # Capture with scrollback: start=-lines to include history
+            captured = pane.capture_pane(start=-lines, join_wrapped=True)
+            raw = "\n".join(captured)
+            cleaned = self._clean_output(raw)
+            return sanitize_pane_text(cleaned)
         return "Error: shogun pane not found"
 
-    def capture_all_panes(self, lines: int = 20) -> list[dict]:
+    def capture_all_panes(self, lines: int = 2000) -> list[dict]:
         """
-        Capture output from all panes in the multiagent session.
+        Capture output from all panes in the multiagent session with scrollback.
 
         Args:
-            lines: Number of lines to capture from each pane (default: 20)
+            lines: Number of lines to capture from scrollback (default: 2000)
 
         Returns:
             List of dictionaries with agent_id, pane_index, and output
@@ -121,10 +169,11 @@ class TmuxBridge:
             if not agent_id:
                 agent_id = f"pane_{pane_index}"
 
-            # Capture pane output
+            # Capture pane output with scrollback
             try:
-                captured = pane.capture_pane()
-                output = _clean_output("\n".join(captured[-lines:]))
+                captured = pane.capture_pane(start=-lines, join_wrapped=True)
+                cleaned = self._clean_output("\n".join(captured))
+                output = sanitize_pane_text(cleaned)
             except Exception:
                 output = "Error: failed to capture pane"
 

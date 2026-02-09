@@ -10,6 +10,8 @@ from unittest.mock import Mock, mock_open, patch
 import pytest
 import yaml
 
+from ws.tmux_bridge import TmuxBridge
+
 
 @pytest.fixture
 def mock_tmux_server():
@@ -278,100 +280,188 @@ def test_tmux_settings_defaults_when_missing(mock_tmux_server, tmp_path):
 # Test: _clean_output()
 # ========================================
 
+SEPARATOR = "─" * 40
+
 
 class TestCleanOutput:
-    """Tests for _clean_output() prompt line removal."""
+    """Tests for TmuxBridge._clean_output static method."""
 
-    def test_preserves_user_input_with_text(self):
-        """【最重要】殿の入力行（❯ テキスト）が保持されること"""
-        from ws.tmux_bridge import _clean_output
+    def test_single_line_user_input_marked(self):
+        """Separator pair with single line user input gets \\x1f marker."""
+        text = "\n".join(
+            [
+                "Claude output line",
+                SEPARATOR,
+                "❯ hello world",
+                SEPARATOR,
+                "More Claude output",
+            ]
+        )
+        result = TmuxBridge._clean_output(text)
+        lines = result.split("\n")
+        assert lines[0] == "Claude output line"
+        assert lines[1] == "\x1fhello world"
+        assert lines[2] == "More Claude output"
 
-        text = "Output line\n❯ テスト入力\nMore output"
-        result = _clean_output(text)
-        assert result == "Output line\n❯ テスト入力\nMore output"
+    def test_multiline_user_input_marked(self):
+        """Multi-line user input: ❯ on first line, continuation lines also marked."""
+        text = "\n".join(
+            [
+                SEPARATOR,
+                "❯ first line",
+                "second line",
+                "third line",
+                SEPARATOR,
+            ]
+        )
+        result = TmuxBridge._clean_output(text)
+        lines = result.split("\n")
+        assert lines[0] == "\x1ffirst line"
+        assert lines[1] == "\x1fsecond line"
+        assert lines[2] == "\x1fthird line"
+        assert len(lines) == 3
 
-    def test_removes_empty_prompt_lines(self):
-        """空プロンプト行（❯のみ）が除去されること"""
-        from ws.tmux_bridge import _clean_output
+    def test_separator_lines_removed(self):
+        """Paired separator lines are removed from output."""
+        text = "\n".join(
+            [
+                "before",
+                SEPARATOR,
+                "❯ input",
+                SEPARATOR,
+                "after",
+            ]
+        )
+        result = TmuxBridge._clean_output(text)
+        assert SEPARATOR not in result
 
-        text = "Output line\n❯ \nMore output"
-        result = _clean_output(text)
-        assert result == "Output line\nMore output"
+    def test_claude_output_not_marked(self):
+        """Text outside separator pairs has no marker."""
+        text = "\n".join(
+            [
+                "Claude says hello",
+                "Another line",
+            ]
+        )
+        result = TmuxBridge._clean_output(text)
+        for line in result.split("\n"):
+            assert not line.startswith("\x1f")
 
-        # ❯のみの行も除去
-        text2 = "Output line\n❯\nMore output"
-        result2 = _clean_output(text2)
-        assert result2 == "Output line\nMore output"
+    def test_status_lines_removed(self):
+        """Status lines starting with ⏵ are removed."""
+        text = "\n".join(
+            [
+                "normal line",
+                "⏵ status info",
+                "another line",
+            ]
+        )
+        result = TmuxBridge._clean_output(text)
+        lines = result.split("\n")
+        assert len(lines) == 2
+        assert lines[0] == "normal line"
+        assert lines[1] == "another line"
 
-    def test_removes_long_separator_lines(self):
-        """区切り線（20文字以上の─連続）が除去されること"""
-        from ws.tmux_bridge import _clean_output
+    def test_hint_lines_removed(self):
+        """Hint lines starting with ✢, ✻, or ✽ are removed."""
+        text = "\n".join(
+            [
+                "normal",
+                "✢ hint1",
+                "✻ hint2",
+                "✽ hint3",
+                "end",
+            ]
+        )
+        result = TmuxBridge._clean_output(text)
+        lines = result.split("\n")
+        assert lines == ["normal", "end"]
 
-        text = "Line 1\n────────────────────────────────\nLine 2"
-        result = _clean_output(text)
-        assert result == "Line 1\nLine 2"
+    def test_unpaired_separator_kept(self):
+        """Single separator (no pair) is kept in output as a regular line."""
+        text = "\n".join(
+            [
+                "before",
+                SEPARATOR,
+                "after",
+            ]
+        )
+        result = TmuxBridge._clean_output(text)
+        lines = result.split("\n")
+        assert len(lines) == 3
+        assert lines[1] == SEPARATOR
 
-    def test_preserves_short_separator_lines(self):
-        """短い─（20文字未満）は保持されること"""
-        from ws.tmux_bridge import _clean_output
+    def test_multiple_pairs(self):
+        """Multiple separator pairs each mark their own user input."""
+        text = "\n".join(
+            [
+                "Claude output 1",
+                SEPARATOR,
+                "❯ input 1",
+                SEPARATOR,
+                "Claude output 2",
+                SEPARATOR,
+                "❯ input 2",
+                SEPARATOR,
+            ]
+        )
+        result = TmuxBridge._clean_output(text)
+        lines = result.split("\n")
+        assert lines[0] == "Claude output 1"
+        assert lines[1] == "\x1finput 1"
+        assert lines[2] == "Claude output 2"
+        assert lines[3] == "\x1finput 2"
 
-        text = "Line 1\n───\nLine 2"
-        result = _clean_output(text)
-        assert result == "Line 1\n───\nLine 2"
+    def test_empty_input(self):
+        """Empty string returns empty string."""
+        assert TmuxBridge._clean_output("") == ""
 
-    def test_removes_status_lines(self):
-        """ステータス行（⏵を含む）が除去されること"""
-        from ws.tmux_bridge import _clean_output
-
-        text = "Working...\n  ⏵⏵ bypass permissions on\nDone"
-        result = _clean_output(text)
-        assert result == "Working...\nDone"
-
-    def test_removes_hint_lines(self):
-        """ヒント行（✢✻✽で始まる行）が除去されること"""
-        from ws.tmux_bridge import _clean_output
-
-        text = "Output\n  ✢ Hint message\n  ✻ Another hint\n  ✽ More hints\nDone"
-        result = _clean_output(text)
-        assert result == "Output\nDone"
-
-    def test_preserves_normal_output(self):
-        """通常の出力（日本語テキスト、コードブロック等）が保持されること"""
-        from ws.tmux_bridge import _clean_output
-
-        text = "日本語テキスト\ndef foo():\n    return 42\n結果: 完了"
-        result = _clean_output(text)
+    def test_no_separators_passthrough(self):
+        """Text without separators passes through (minus noise)."""
+        text = "line1\nline2\nline3"
+        result = TmuxBridge._clean_output(text)
         assert result == text
 
-    def test_handles_empty_input(self):
-        """空の入力でエラーにならないこと"""
-        from ws.tmux_bridge import _clean_output
-
-        result = _clean_output("")
-        assert result == ""
-
-    def test_trims_trailing_empty_lines(self):
-        """末尾の空行がトリムされること"""
-        from ws.tmux_bridge import _clean_output
-
-        text = "Line 1\nLine 2\n\n\n"
-        result = _clean_output(text)
-        assert result == "Line 1\nLine 2"
-
-    def test_complex_output_with_user_input(self):
-        """複数のプロンプト要素が混在しても殿の入力は保持されること"""
-        from ws.tmux_bridge import _clean_output
-
-        text = (
-            "Output line 1\n"
-            "────────────────────────────────\n"
-            "❯ 殿の重要な入力\n"
-            "  ⏵⏵ bypass permissions on (shift+tab to cycle)\n"
-            "Output line 2\n"
-            "❯ \n"
-            "❯ もう一つの入力\n"
-            "────────────────────────────────\n"
-            "\n"
+    def test_prompt_prefix_stripped(self):
+        """❯ prefix is stripped only from user input lines."""
+        text = "\n".join(
+            [
+                SEPARATOR,
+                "❯ user typed this",
+                SEPARATOR,
+            ]
         )
-        result = _clean_output(text)
-        assert result == "Output line 1\n❯ 殿の重要な入力\nOutput line 2\n❯ もう一つの入力"
+        result = TmuxBridge._clean_output(text)
+        assert result == "\x1fuser typed this"
+
+    def test_user_input_without_prompt_prefix(self):
+        """Continuation lines without ❯ still get marker."""
+        text = "\n".join(
+            [
+                SEPARATOR,
+                "❯ line one",
+                "line two no prompt",
+                SEPARATOR,
+            ]
+        )
+        result = TmuxBridge._clean_output(text)
+        lines = result.split("\n")
+        assert lines[0] == "\x1fline one"
+        assert lines[1] == "\x1fline two no prompt"
+
+    def test_odd_separators_last_unpaired(self):
+        """Odd number of separators: last one unpaired, kept as-is."""
+        text = "\n".join(
+            [
+                SEPARATOR,
+                "❯ input",
+                SEPARATOR,
+                "Claude output",
+                SEPARATOR,
+            ]
+        )
+        result = TmuxBridge._clean_output(text)
+        lines = result.split("\n")
+        assert lines[0] == "\x1finput"
+        assert lines[1] == "Claude output"
+        assert lines[2] == SEPARATOR
