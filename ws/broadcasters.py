@@ -9,8 +9,8 @@ from dataclasses import dataclass, field
 
 from fastapi import WebSocket
 
+from .delta import compute_delta
 from .runtime import TmuxRuntime
-from .state import PaneState
 from .tmux_bridge import TmuxBridge
 
 logger = logging.getLogger(__name__)
@@ -38,21 +38,18 @@ class AdaptivePoller:
         """Increase interval when no change is detected."""
         self.no_change_count += 1
         if self.no_change_count >= self.no_change_threshold:
-            self.current_interval = min(
-                self.max_interval, self.current_interval * 2
-            )
+            self.current_interval = min(self.max_interval, self.current_interval * 2)
 
 
 @dataclass
 class MonitorBroadcaster:
-    """Broadcaster for all multiagent panes with differential updates."""
+    """Broadcaster for all multiagent panes with delta updates."""
 
     tmux: TmuxBridge
     runtime: TmuxRuntime
     poller: AdaptivePoller
     subscribers: set[WebSocket] = field(default_factory=set)
-    pane_state: PaneState = field(default_factory=lambda: PaneState())
-    _last_full_data: dict[str, str] = field(default_factory=dict)
+    _pane_lines: dict[str, list[str]] = field(default_factory=dict)
     task: asyncio.Task[None] | None = None
     running: bool = False
 
@@ -78,49 +75,67 @@ class MonitorBroadcaster:
     async def subscribe(self, ws: WebSocket) -> None:
         """Subscribe a websocket to receive updates."""
         self.subscribers.add(ws)
-        # Send initial full data to new subscriber
-        if self._last_full_data:
+        # Send initial full data to new subscriber as reset for each pane
+        if self._pane_lines:
             try:
-                payload = {"ts": time.time(), "updates": self._last_full_data}
+                updates = {}
+                for pane_id, lines in self._pane_lines.items():
+                    updates[pane_id] = {"type": "reset", "lines": lines}
+                payload = {
+                    "type": "monitor_update",
+                    "updates": updates,
+                    "ts": time.time(),
+                }
                 await ws.send_json(payload)
             except Exception:
                 logger.error("Failed to send initial data to new subscriber")
-        logger.info("MonitorBroadcaster: subscriber added (total: %d)", len(self.subscribers))
+        logger.info(
+            "MonitorBroadcaster: subscriber added (total: %d)", len(self.subscribers)
+        )
 
     async def unsubscribe(self, ws: WebSocket) -> None:
         """Unsubscribe a websocket."""
         self.subscribers.discard(ws)
-        logger.info("MonitorBroadcaster: subscriber removed (total: %d)", len(self.subscribers))
+        logger.info(
+            "MonitorBroadcaster: subscriber removed (total: %d)", len(self.subscribers)
+        )
 
     async def _loop(self) -> None:
-        """Main broadcast loop."""
+        """Main broadcast loop with delta updates."""
         while self.running:
             try:
                 # Capture all panes (locked to serialize tmux access)
-                panes_data = await self.runtime.run_locked(
-                    self.tmux.capture_all_panes
-                )
+                panes_data = await self.runtime.run_locked(self.tmux.capture_all_panes)
 
-                # Convert list[dict] to dict[str, str]
-                panes = {
-                    item["agent_id"]: item["output"] for item in panes_data
+                # Convert to dict[str, list[str]] for delta computation
+                panes_lines = {
+                    item["agent_id"]: item["output"].splitlines() for item in panes_data
                 }
 
-                # Keep full data for new subscribers
-                self._last_full_data = panes
+                # Compute delta for each pane
+                delta_updates = {}
+                for pane_id, curr_lines in panes_lines.items():
+                    prev_lines = self._pane_lines.get(pane_id, [])
+                    delta_result = compute_delta(prev_lines, curr_lines)
+                    if delta_result["type"] != "noop":
+                        delta_updates[pane_id] = delta_result
 
-                # Compute diff
-                updates = self.pane_state.diff(panes)
+                # Update stored state
+                self._pane_lines = panes_lines
 
                 # Adjust polling interval
-                if updates:
+                if delta_updates:
                     self.poller.on_change()
                 else:
                     self.poller.on_no_change()
 
                 # Broadcast updates (only if non-empty)
-                if updates:
-                    payload = {"ts": time.time(), "updates": updates}
+                if delta_updates:
+                    payload = {
+                        "type": "monitor_update",
+                        "updates": delta_updates,
+                        "ts": time.time(),
+                    }
                     dead_sockets = []
                     for ws in self.subscribers:
                         try:
@@ -142,14 +157,13 @@ class MonitorBroadcaster:
 
 @dataclass
 class ShogunBroadcaster:
-    """Broadcaster for shogun pane output."""
+    """Broadcaster for shogun pane output with delta updates."""
 
     tmux: TmuxBridge
     runtime: TmuxRuntime
     poller: AdaptivePoller
     subscribers: set[WebSocket] = field(default_factory=set)
-    _last_output: str = ""
-    _last_hash: str | None = None
+    _last_lines: list[str] = field(default_factory=list)
     task: asyncio.Task[None] | None = None
     running: bool = False
 
@@ -175,48 +189,57 @@ class ShogunBroadcaster:
     async def subscribe(self, ws: WebSocket) -> None:
         """Subscribe a websocket to receive updates."""
         self.subscribers.add(ws)
-        # Send current output to new subscriber
-        if self._last_output:
+        # Send current full output to new subscriber as reset
+        if self._last_lines:
             try:
-                payload = {"ts": time.time(), "output": self._last_output}
+                payload = {
+                    "type": "reset",
+                    "lines": self._last_lines,
+                    "ts": time.time(),
+                }
                 await ws.send_json(payload)
             except Exception:
                 logger.error("Failed to send initial output to new subscriber")
-        logger.info("ShogunBroadcaster: subscriber added (total: %d)", len(self.subscribers))
+        logger.info(
+            "ShogunBroadcaster: subscriber added (total: %d)", len(self.subscribers)
+        )
 
     async def unsubscribe(self, ws: WebSocket) -> None:
         """Unsubscribe a websocket."""
         self.subscribers.discard(ws)
-        logger.info("ShogunBroadcaster: subscriber removed (total: %d)", len(self.subscribers))
+        logger.info(
+            "ShogunBroadcaster: subscriber removed (total: %d)", len(self.subscribers)
+        )
 
     async def _loop(self) -> None:
-        """Main broadcast loop."""
+        """Main broadcast loop with delta updates."""
         while self.running:
             try:
                 # Capture shogun pane (locked to serialize tmux access)
-                output = await self.runtime.run_locked(
-                    self.tmux.capture_shogun_pane
-                )
+                output = await self.runtime.run_locked(self.tmux.capture_shogun_pane)
 
-                # Hash and diff
-                import hashlib
+                # Split into lines for delta computation
+                curr_lines = output.splitlines()
 
-                current_hash = hashlib.sha1(output.encode("utf-8")).hexdigest()
-                has_changed = current_hash != self._last_hash
+                # Compute delta
+                delta_result = compute_delta(self._last_lines, curr_lines)
 
-                # Keep output for new subscribers
-                self._last_output = output
-                self._last_hash = current_hash
+                # Update stored lines
+                self._last_lines = curr_lines
 
                 # Adjust polling interval
-                if has_changed:
+                if delta_result["type"] != "noop":
                     self.poller.on_change()
                 else:
                     self.poller.on_no_change()
 
-                # Broadcast output (only if changed)
-                if has_changed:
-                    payload = {"ts": time.time(), "output": output}
+                # Broadcast delta (only if not noop)
+                if delta_result["type"] != "noop":
+                    payload = {
+                        "type": delta_result["type"],
+                        "lines": delta_result.get("lines", []),
+                        "ts": time.time(),
+                    }
                     dead_sockets = []
                     for ws in self.subscribers:
                         try:

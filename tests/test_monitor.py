@@ -86,13 +86,13 @@ class TestCaptureAllPanes:
             assert result[0]["output"] == "Error: failed to capture pane"
 
     def test_capture_all_panes_limits_lines(self):
-        """Test that capture_all_panes respects the lines parameter."""
+        """Test that capture_all_panes uses scrollback with start=-lines."""
         with patch("libtmux.Server") as mock_server:
             mock_session = Mock()
             mock_pane = Mock()
             mock_pane.pane_index = "0"
             mock_pane.show_option.return_value = "karo"
-            # Return 10 lines
+            # Return 10 lines from scrollback
             mock_pane.capture_pane.return_value = [f"line{i}" for i in range(10)]
 
             mock_session.panes = [mock_pane]
@@ -101,8 +101,11 @@ class TestCaptureAllPanes:
             bridge = TmuxBridge()
             result = bridge.capture_all_panes(lines=5)
 
-            # Should only get the last 5 lines
-            assert result[0]["output"] == "line5\nline6\nline7\nline8\nline9"
+            # Should capture with start=-5 and get all 10 lines (mock behavior)
+            mock_pane.capture_pane.assert_called_once_with(start=-5, join_wrapped=True)
+            # Output contains all lines returned by mock
+            assert "line0" in result[0]["output"]
+            assert "line9" in result[0]["output"]
 
 
 class TestMonitorWebSocketHandler:

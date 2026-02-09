@@ -25,11 +25,15 @@
             <div id="command-result"></div>
         </section>
 
-        <section class="realtime-output">
-            <h2>🔄 リアルタイム出力</h2>
-            <p class="description">将軍ペイン（tmux）の出力をリアルタイム表示</p>
-            <div id="shogun-output" class="terminal"><pre>接続中...</pre></div>
+        <section class="chat-log-section">
+            <h2>📝 会話ログ</h2>
+            <div id="chat-log"></div>
         </section>
+
+        <details class="raw-output-details">
+            <summary>🔄 tmux raw出力（折りたたみ）</summary>
+            <div id="shogun-output" class="terminal"><pre>接続中...</pre></div>
+        </details>
     </div>
 
     <!-- タブ2: 監視 -->
@@ -62,23 +66,55 @@
     </div>
 </div>
 
-<script>
-// 殿の入力行の色（足軽1がテンプレート変数で渡す、デフォルトはライトブルー）
-const userInputColor = "{{ user_input_color|default('#4FC3F7') }}";
+<style>
+/* 会話ログUI */
+#chat-log {
+    max-height: 70vh;
+    overflow-y: auto;
+    padding: 10px;
+    background: rgba(0,0,0,.05);
+    border-radius: 8px;
+}
+.msg {
+    padding: 8px 10px;
+    border-radius: 10px;
+    margin: 6px 0;
+    white-space: pre-wrap;
+    font-family: monospace;
+    font-size: 14px;
+}
+.msg.user {
+    background: rgba(80,160,255,.15);
+    border: 1px solid rgba(80,160,255,.35);
+}
+.msg.shogun {
+    background: rgba(255,220,80,.12);
+    border: 1px solid rgba(255,220,80,.30);
+}
+.msg.system {
+    opacity: .75;
+    font-style: italic;
+}
+</style>
 
-// XSS防止: HTMLエスケープ関数
+<script>
+// ユーザー入力マーカー定数
+const USER_INPUT_MARKER = '\x1f';
+
+// HTMLエスケープ関数（XSS対策）
 function escapeHtml(text) {
     const div = document.createElement('div');
     div.textContent = text;
     return div.innerHTML;
 }
 
-// 殿の入力行（❯）を色分けする関数
+// マーカーベースの色分け関数
 function colorizeOutput(text, color) {
     return text.split('\n').map(line => {
-        if (line.match(/^\s*❯\s+\S/)) {
-            // 殿の入力行: ❯の後にテキストがある行
-            return '<span style="color: ' + color + '">' + escapeHtml(line) + '</span>';
+        if (line.startsWith(USER_INPUT_MARKER)) {
+            // マーカー付き行 = ユーザー入力行
+            const content = line.substring(1);  // マーカーを除去
+            return '<span style="color: ' + color + '">' + escapeHtml(content) + '</span>';
         }
         return escapeHtml(line);
     }).join('\n');
@@ -160,15 +196,105 @@ document.addEventListener('click', (e) => {
     }
 });
 
-// WebSocket でリアルタイム出力を受信（指揮タブ）
+// 会話ログ関連変数
+const MAX_CHAT_LOG_MESSAGES = 200;
+
+// 会話ログにメッセージを追加する関数
+function addChatMessage(text, className) {
+    const chatLog = document.getElementById('chat-log');
+    const msgDiv = document.createElement('div');
+    msgDiv.className = 'msg ' + className;
+    msgDiv.textContent = text;
+    chatLog.appendChild(msgDiv);
+
+    // 上限管理：古いメッセージを削除
+    while (chatLog.children.length > MAX_CHAT_LOG_MESSAGES) {
+        chatLog.removeChild(chatLog.firstChild);
+    }
+
+    chatLog.scrollTop = chatLog.scrollHeight;
+}
+
+// raw出力を全置換する関数
+function updateRawOutput(text) {
+    const el = document.getElementById('shogun-output');
+    el.innerHTML = '<pre>' + colorizeOutput(text, 'lightblue') + '</pre>';
+}
+
+// raw出力に追記する関数
+function appendToRawOutput(text) {
+    const el = document.getElementById('shogun-output');
+    const pre = el.querySelector('pre');
+    if (pre) {
+        // 既存コンテンツに追記
+        const currentHtml = pre.innerHTML;
+        pre.innerHTML = currentHtml + '\n' + colorizeOutput(text, 'lightblue');
+    } else {
+        // preタグがない場合は新規作成
+        el.innerHTML = '<pre>' + colorizeOutput(text, 'lightblue') + '</pre>';
+    }
+}
+
+// htmx afterRequest イベントで送信成功時に会話ログに追加
+document.body.addEventListener('htmx:afterRequest', (e) => {
+    if (e.detail.pathInfo.requestPath === '/api/command' && e.detail.successful) {
+        const form = e.target;
+        const textarea = form.querySelector('textarea[name="instruction"]');
+        if (textarea && textarea.value.trim()) {
+            addChatMessage(textarea.value.trim(), 'user');
+        }
+    }
+});
+
+// WebSocket でリアルタイム出力を受信（指揮タブ）— delta 対応
 const ws = new WebSocket(`ws://${location.host}/ws`);
 ws.onmessage = (e) => {
-    const msg = JSON.parse(e.data);
-    if (msg.output !== undefined) {
-        const el = document.getElementById('shogun-output');
-        const wasAtBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 50;
-        el.innerHTML = '<pre>' + colorizeOutput(msg.output, userInputColor) + '</pre>';
-        // ユーザーが最下部付近にいる場合のみ自動スクロール
+    const data = JSON.parse(e.data);
+    const el = document.getElementById('shogun-output');
+    const wasAtBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 50;
+
+    if (data.type === 'noop') {
+        return; // 変更なし、何もしない
+    }
+
+    if (data.type === 'reset') {
+        // フル再送：全置換
+        const fullText = data.lines.join('\n');
+        updateRawOutput(fullText);
+        // 会話ログには新しいメッセージとして追加
+        if (fullText.trim()) {
+            addChatMessage(fullText.trim(), 'shogun');
+        }
+        if (wasAtBottom) {
+            el.scrollTop = el.scrollHeight;
+        }
+        return;
+    }
+
+    if (data.type === 'delta') {
+        // 増分：新しい行を追記
+        const newText = data.lines.join('\n');
+        if (newText.trim()) {
+            appendToRawOutput(newText);
+            addChatMessage(newText.trim(), 'shogun');
+        }
+        if (wasAtBottom) {
+            el.scrollTop = el.scrollHeight;
+        }
+        return;
+    }
+
+    // 後方互換: 旧形式（プレーンテキスト）の場合
+    if (data.output !== undefined) {
+        // 10KB（10000文字）を超える場合は末尾10KBのみ使用
+        let output = data.output;
+        if (output.length > 10000) {
+            output = output.slice(-10000);
+        }
+        updateRawOutput(output);
+        if (output.trim()) {
+            addChatMessage(output.trim(), 'shogun');
+        }
         if (wasAtBottom) {
             el.scrollTop = el.scrollHeight;
         }
@@ -178,16 +304,47 @@ ws.onclose = () => {
     document.getElementById('shogun-output').innerHTML = '<pre>接続が切断されました。ページをリロードしてください。</pre>';
 };
 
-// 監視タブ: 全ペインリアルタイム表示（差分マージ対応）
-const monitorPanes = {}; // ペイン出力のローカルキャッシュ
+// 監視タブ: 全ペインリアルタイム表示（delta 対応）
+const monitorPanes = {}; // ペイン出力のローカルキャッシュ（行配列）
 
 const monitorWs = new WebSocket(`ws://${location.host}/ws/monitor`);
 monitorWs.onmessage = (e) => {
-    const msg = JSON.parse(e.data);
-    if (msg.updates) {
-        // 差分マージ: 変更があったpaneのみ更新
-        Object.entries(msg.updates).forEach(([paneId, output]) => {
-            monitorPanes[paneId] = output;
+    const data = JSON.parse(e.data);
+    if (data.type === 'monitor_update' && data.updates) {
+        // delta 対応: 変更があったpaneのみ更新
+        Object.entries(data.updates).forEach(([paneId, deltaResult]) => {
+            if (deltaResult.type === 'reset') {
+                // フル再送：全置換
+                monitorPanes[paneId] = deltaResult.lines;
+            } else if (deltaResult.type === 'delta') {
+                // 増分：追記
+                if (!monitorPanes[paneId]) {
+                    monitorPanes[paneId] = [];
+                }
+                monitorPanes[paneId].push(...deltaResult.lines);
+                // 行数上限チェック: 5000行を超えたら末尾5000行のみ保持
+                if (monitorPanes[paneId].length > 5000) {
+                    monitorPanes[paneId] = monitorPanes[paneId].slice(-5000);
+                }
+            }
+            // noop の場合は何もしない
+        });
+        renderMonitorPanes(monitorPanes);
+        return;
+    }
+
+    // 後方互換: 旧形式（プレーンテキスト）の場合
+    if (data.updates) {
+        Object.entries(data.updates).forEach(([paneId, output]) => {
+            // 旧形式は文字列なので行配列に変換
+            if (typeof output === 'string') {
+                // 10KB（10000文字）を超える場合は末尾10KBのみ使用
+                let processedOutput = output;
+                if (output.length > 10000) {
+                    processedOutput = output.slice(-10000);
+                }
+                monitorPanes[paneId] = processedOutput.split('\n');
+            }
         });
         renderMonitorPanes(monitorPanes);
     }
@@ -197,7 +354,7 @@ monitorWs.onclose = () => {
     if (grid) grid.innerHTML = '<div class="monitor-loading">接続が切断されました。ページをリロードしてください。</div>';
 };
 
-// ペイン描画関数
+// ペイン描画関数（delta 対応: 行配列をレンダリング）
 function renderMonitorPanes(panes) {
     const grid = document.getElementById('monitor-grid');
     if (!grid) return;
@@ -210,8 +367,11 @@ function renderMonitorPanes(panes) {
     });
 
     grid.innerHTML = sortedPaneIds.map(paneId => {
-        const output = panes[paneId];
-        const colorizedOutput = colorizeOutput(output, userInputColor);
+        const lines = panes[paneId];
+        // 行配列を文字列に変換
+        const output = Array.isArray(lines) ? lines.join('\n') : lines;
+        // colorizeOutput でマーカー付き行をライトブルーに色分け
+        const colorizedOutput = colorizeOutput(output, 'lightblue');
         return `
             <div class="pane-card" data-pane-id="${paneId}">
                 <div class="pane-header">${paneId}</div>

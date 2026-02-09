@@ -1,6 +1,5 @@
 """Tests for ws/broadcasters.py components."""
 
-
 from ws.broadcasters import AdaptivePoller
 
 

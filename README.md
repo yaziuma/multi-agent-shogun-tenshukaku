@@ -102,12 +102,25 @@ bakuhu:
   base_path: "/path/to/multi-agent-bakuhu"
 
 tmux:
-  shogun_session: "shogun"          # Shogun tmux session name
-  multiagent_session: "multiagent"  # Multi-agent tmux session name
-  shogun_pane: "0.0"                # Shogun pane index
+  shogun_session: "shogun"
+  multiagent_session: "multiagent"
+  shogun_pane: "0.0"
+
+runtime:
+  thread_pool_workers: 2
 
 monitor:
-  update_interval_ms: 5000  # Monitor tab update interval (ms)
+  base_interval_ms: 5000
+  max_interval_ms: 10000
+  no_change_threshold: 2
+
+shogun:
+  base_interval_ms: 1000
+  max_interval_ms: 3000
+  no_change_threshold: 2
+
+ui:
+  user_input_color: "#4FC3F7"
 ```
 
 ### Running
@@ -115,6 +128,9 @@ monitor:
 ```bash
 # Using the start script (recommended — handles process management)
 ./start.sh
+
+# Development restart (full cache cleanup + hot reload)
+./restart.sh
 
 # Or manually
 uv run uvicorn main:app --host 0.0.0.0 --port 30000
@@ -128,8 +144,12 @@ Access at `http://<your-host>:30000`
 multi-agent-shogun-tenshukaku/
 ├── main.py                  # FastAPI application & API routes
 ├── ws/
-│   ├── handlers.py          # WebSocket handlers (shogun + monitor)
-│   └── tmux_bridge.py       # tmux session interaction layer
+│   ├── broadcasters.py     # Broadcast managers (shogun + monitor)
+│   ├── dashboard_cache.py  # mtime-based dashboard file cache
+│   ├── handlers.py         # WebSocket handlers (shogun + monitor)
+│   ├── runtime.py          # Thread pool executor + async lock
+│   ├── state.py            # Pane state diff detection (sha1)
+│   └── tmux_bridge.py      # tmux session interaction layer
 ├── templates/
 │   ├── base.html            # Base template (header, footer, assets)
 │   ├── index.html           # Main SPA (4 tabs + JS)
@@ -141,8 +161,10 @@ multi-agent-shogun-tenshukaku/
 │   └── settings.yaml        # Server, bakuhu path, tmux & monitor configuration
 ├── tests/
 │   ├── test_api.py          # API endpoint tests
+│   ├── test_broadcasters.py # Broadcaster unit tests
+│   ├── test_monitor.py      # Monitor WebSocket tests
 │   ├── test_tmux_bridge.py  # TmuxBridge unit tests
-│   └── test_monitor.py      # Monitor WebSocket tests
+│   └── test_ws_core.py      # PaneState & DashboardCache tests
 ├── start.sh                 # Safe startup script
 ├── pyproject.toml           # Project metadata & dependencies
 └── assets/
