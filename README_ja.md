@@ -14,13 +14,15 @@
 
 ### 指揮タブ
 
-将軍エージェントのtmuxペインに直接メッセージを送信する。Ctrl+Enterによるクイック送信と、Claude Codeの割り込みに使うEscapeキー送信ボタンを備える。ペイン出力は1秒間隔でリアルタイム更新。
+将軍エージェントのtmuxペインに直接メッセージを送信する。Ctrl+Enterによるクイック送信と、Claude Codeの割り込みに使うEscapeキー送信ボタンを備える。ペイン出力は1秒間隔でリアルタイム更新。Top/Bottomスクロールボタンで長い出力のナビゲーションが可能。
+
+折りたたみ式の **TUI操作パネル** から、方向キー、Enter、Tab、Ctrl+Cなどのキーボード入力を直接送信可能。ブラウザを離れることなく対話型CLIインターフェースを操作できる。
 
 ![指揮タブ](assets/screenshots/tab-command.png)
 
 ### 監視タブ
 
-全エージェントペインをグリッドレイアウトでリアルタイム表示。更新間隔は設定可能（デフォルト5秒）。
+全エージェントペインをグリッドレイアウトでリアルタイム表示。更新間隔は設定可能（デフォルト5秒）。**監視クリア** ボタンでtmuxペイン履歴に影響を与えずに表示をリセット可能（非破壊的）。
 
 ![監視タブ](assets/screenshots/tab-monitor.png)
 
@@ -44,6 +46,7 @@
     ├── GET  /              → メインSPA（Jinja2テンプレート + htmx）
     ├── POST /api/command   → tmux send-keys で将軍ペインに送信
     ├── POST /api/special-key → Escキー送信（許可リスト方式）
+    ├── POST /api/monitor/clear → 監視表示クリア（非破壊的）
     ├── GET  /api/dashboard → dashboard.md 読み取り
     ├── GET  /api/history   → shogun_to_karo.yaml 読み取り
     ├── WS   /ws            → 将軍ペインのリアルタイム出力

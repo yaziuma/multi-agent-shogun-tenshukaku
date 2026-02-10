@@ -14,13 +14,15 @@ Tenshukaku provides a browser-based interface for commanding and monitoring a fl
 
 ### Command Tab (指揮)
 
-Send messages directly to the Shogun agent's tmux pane. Supports Ctrl+Enter for quick submission and an Escape key button to interrupt Claude Code when needed. Pane output updates every second in real time.
+Send messages directly to the Shogun agent's tmux pane. Supports Ctrl+Enter for quick submission and an Escape key button to interrupt Claude Code when needed. Pane output updates every second in real time. Includes Top/Bottom scroll buttons for navigating long output.
+
+A collapsible **TUI Operation Panel** provides direct keyboard input: arrow keys, Enter, Tab, Ctrl+C, and other special keys — useful for navigating interactive CLI interfaces without leaving the browser.
 
 ![Command Tab](assets/screenshots/tab-command.png)
 
 ### Monitor Tab (監視)
 
-Real-time grid view of all agent panes. Update interval is configurable (default: 5 seconds).
+Real-time grid view of all agent panes. Update interval is configurable (default: 5 seconds). A **Clear Display** button resets the monitor view without affecting tmux pane history (non-destructive).
 
 ![Monitor Tab](assets/screenshots/tab-monitor.png)
 
@@ -44,6 +46,7 @@ Browser (HTTP + WebSocket)
     ├── GET  /              → Main SPA (Jinja2 templates + htmx)
     ├── POST /api/command   → tmux send-keys to shogun pane
     ├── POST /api/special-key → Send Escape key (allowlist-based)
+    ├── POST /api/monitor/clear → Clear monitor display (non-destructive)
     ├── GET  /api/dashboard → Read dashboard.md
     ├── GET  /api/history   → Read shogun_to_karo.yaml
     ├── WS   /ws            → Real-time shogun pane output
