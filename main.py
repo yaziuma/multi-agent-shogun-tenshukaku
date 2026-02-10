@@ -165,6 +165,26 @@ async def get_history(request: Request):
         return HTMLResponse(f"<pre>Error: {e}</pre>")
 
 
+@app.post("/api/monitor/clear")
+async def clear_monitor(request: Request):
+    """
+    Clear monitor display by setting snapshot.
+
+    Saves current pane content as snapshot. New subscribers and reconnecting
+    clients will only receive content generated after this clear point.
+    Does NOT affect tmux pane history (non-destructive).
+
+    Returns:
+        Status of clear operation
+    """
+    try:
+        broadcaster = request.app.state.monitor_broadcaster
+        await broadcaster.clear_all()
+        return {"status": "cleared"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time shogun pane output."""

@@ -50,6 +50,7 @@ class MonitorBroadcaster:
     poller: AdaptivePoller
     subscribers: set[WebSocket] = field(default_factory=set)
     _pane_lines: dict[str, list[str]] = field(default_factory=dict)
+    _clear_snapshot: dict[str, list[str]] = field(default_factory=dict)
     task: asyncio.Task[None] | None = None
     running: bool = False
 
@@ -75,18 +76,34 @@ class MonitorBroadcaster:
     async def subscribe(self, ws: WebSocket) -> None:
         """Subscribe a websocket to receive updates."""
         self.subscribers.add(ws)
-        # Send initial full data to new subscriber as reset for each pane
+        # Send initial data to new subscriber (only content after clear snapshot)
         if self._pane_lines:
             try:
                 updates = {}
                 for pane_id, lines in self._pane_lines.items():
-                    updates[pane_id] = {"type": "reset", "lines": lines}
-                payload = {
-                    "type": "monitor_update",
-                    "updates": updates,
-                    "ts": time.time(),
-                }
-                await ws.send_json(payload)
+                    # If clear snapshot exists, send only content after snapshot
+                    if pane_id in self._clear_snapshot:
+                        snapshot = self._clear_snapshot[pane_id]
+                        # Find common prefix length
+                        common_len = 0
+                        for i in range(min(len(snapshot), len(lines))):
+                            if snapshot[i] != lines[i]:
+                                break
+                            common_len = i + 1
+                        # Send only lines after snapshot (even if empty, to show pane exists)
+                        new_lines = lines[common_len:]
+                        updates[pane_id] = {"type": "reset", "lines": new_lines}
+                    else:
+                        # No snapshot for this pane, send all content
+                        updates[pane_id] = {"type": "reset", "lines": lines}
+
+                if updates:
+                    payload = {
+                        "type": "monitor_update",
+                        "updates": updates,
+                        "ts": time.time(),
+                    }
+                    await ws.send_json(payload)
             except Exception:
                 logger.error("Failed to send initial data to new subscriber")
         logger.info(
@@ -100,6 +117,34 @@ class MonitorBroadcaster:
             "MonitorBroadcaster: subscriber removed (total: %d)", len(self.subscribers)
         )
 
+    async def clear_all(self) -> None:
+        """Clear monitor display by setting snapshot.
+
+        Saves current pane lines as snapshot. Future subscribers will only see
+        content after this snapshot. Does NOT clear _pane_lines (preserves delta).
+        """
+        # Save current state as clear snapshot
+        self._clear_snapshot = {pane_id: lines.copy() for pane_id, lines in self._pane_lines.items()}
+
+        # Broadcast empty updates to all current subscribers
+        if self.subscribers:
+            payload = {
+                "type": "monitor_update",
+                "updates": {},
+                "ts": time.time(),
+            }
+            dead_sockets = []
+            for ws in self.subscribers:
+                try:
+                    await ws.send_json(payload)
+                except Exception:
+                    dead_sockets.append(ws)
+            # Remove failed websockets
+            for ws in dead_sockets:
+                self.subscribers.discard(ws)
+
+        logger.info("MonitorBroadcaster: cleared (snapshot saved, %d panes)", len(self._clear_snapshot))
+
     async def _loop(self) -> None:
         """Main broadcast loop with delta updates."""
         while self.running:
@@ -112,10 +157,11 @@ class MonitorBroadcaster:
                     item["agent_id"]: item["output"].splitlines() for item in panes_data
                 }
 
-                # Compute delta for each pane
+                # Compute delta for each pane (always between consecutive captures)
                 delta_updates = {}
                 for pane_id, curr_lines in panes_lines.items():
                     prev_lines = self._pane_lines.get(pane_id, [])
+                    # Delta calculation is always normal (snapshot only affects subscribe())
                     delta_result = compute_delta(prev_lines, curr_lines)
                     if delta_result["type"] != "noop":
                         delta_updates[pane_id] = delta_result
