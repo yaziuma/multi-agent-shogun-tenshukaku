@@ -465,3 +465,98 @@ class TestCleanOutput:
         assert lines[0] == "\x1finput"
         assert lines[1] == "Claude output"
         assert lines[2] == SEPARATOR
+
+
+# ========================================
+# Test: send_special_key() - New Keys
+# ========================================
+
+
+class TestSendSpecialKeyNewKeys:
+    """Tests for send_special_key() with newly added keys."""
+
+    def test_send_special_key_enter(self, bridge_instance):
+        """Test sending Enter key."""
+        with patch("subprocess.run") as mock_run:
+            result = bridge_instance.send_special_key("Enter")
+            assert result is True
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert "Enter" in args
+
+    def test_send_special_key_tab(self, bridge_instance):
+        """Test sending Tab key."""
+        with patch("subprocess.run") as mock_run:
+            result = bridge_instance.send_special_key("Tab")
+            assert result is True
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert "Tab" in args
+
+    def test_send_special_key_btab(self, bridge_instance):
+        """Test sending BTab (Shift+Tab) key."""
+        with patch("subprocess.run") as mock_run:
+            result = bridge_instance.send_special_key("BTab")
+            assert result is True
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert "BTab" in args
+
+    def test_send_special_key_arrow_keys(self, bridge_instance):
+        """Test sending arrow keys (Up, Down, Left, Right)."""
+        for key in ["Up", "Down", "Left", "Right"]:
+            with patch("subprocess.run") as mock_run:
+                result = bridge_instance.send_special_key(key)
+                assert result is True
+                mock_run.assert_called_once()
+                args = mock_run.call_args[0][0]
+                assert key in args
+
+    def test_send_special_key_numbers(self, bridge_instance):
+        """Test sending number keys (0-9)."""
+        for num in range(10):
+            key = str(num)
+            with patch("subprocess.run") as mock_run:
+                result = bridge_instance.send_special_key(key)
+                assert result is True
+                mock_run.assert_called_once()
+                args = mock_run.call_args[0][0]
+                assert key in args
+
+    def test_send_special_key_yes_no(self, bridge_instance):
+        """Test sending y/n keys."""
+        for key in ["y", "n"]:
+            with patch("subprocess.run") as mock_run:
+                result = bridge_instance.send_special_key(key)
+                assert result is True
+                mock_run.assert_called_once()
+                args = mock_run.call_args[0][0]
+                assert key in args
+
+    def test_send_special_key_space(self, bridge_instance):
+        """Test sending Space key."""
+        with patch("subprocess.run") as mock_run:
+            result = bridge_instance.send_special_key("Space")
+            assert result is True
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert "Space" in args
+
+    def test_send_special_key_bspace(self, bridge_instance):
+        """Test sending BSpace (Backspace) key."""
+        with patch("subprocess.run") as mock_run:
+            result = bridge_instance.send_special_key("BSpace")
+            assert result is True
+            mock_run.assert_called_once()
+            args = mock_run.call_args[0][0]
+            assert "BSpace" in args
+
+    def test_send_special_key_disallowed_key(self, bridge_instance):
+        """Test that disallowed keys raise ValueError."""
+        with pytest.raises(ValueError, match="not allowed"):
+            bridge_instance.send_special_key("Delete")
+
+    def test_send_special_key_disallowed_key_f1(self, bridge_instance):
+        """Test that function keys are not allowed."""
+        with pytest.raises(ValueError, match="not allowed"):
+            bridge_instance.send_special_key("F1")

@@ -198,3 +198,82 @@ class TestSpecialKeyAPI:
         data = response.json()
         assert data["status"] == "error"
         assert "message" in data
+
+
+class TestSpecialKeyNewKeys:
+    """POST /api/special-key の新キーテスト"""
+
+    def test_special_key_enter(self, client, mock_bridge):
+        """Enterキー送信が成功する"""
+        response = client.post("/api/special-key", json={"key": "Enter"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "sent"
+        assert data["key"] == "Enter"
+        mock_bridge.send_special_key.assert_called_once_with("Enter")
+
+    def test_special_key_tab(self, client, mock_bridge):
+        """Tabキー送信が成功する"""
+        response = client.post("/api/special-key", json={"key": "Tab"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "sent"
+        assert data["key"] == "Tab"
+
+    def test_special_key_btab(self, client, mock_bridge):
+        """BTab (Shift+Tab) キー送信が成功する"""
+        response = client.post("/api/special-key", json={"key": "BTab"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "sent"
+        assert data["key"] == "BTab"
+
+    def test_special_key_arrow_keys(self, client, mock_bridge):
+        """矢印キー送信が成功する"""
+        for key in ["Up", "Down", "Left", "Right"]:
+            mock_bridge.reset_mock()
+            response = client.post("/api/special-key", json={"key": key})
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "sent"
+            assert data["key"] == key
+            mock_bridge.send_special_key.assert_called_once_with(key)
+
+    def test_special_key_numbers(self, client, mock_bridge):
+        """数字キー送信が成功する"""
+        for num in range(10):
+            mock_bridge.reset_mock()
+            key = str(num)
+            response = client.post("/api/special-key", json={"key": key})
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "sent"
+            assert data["key"] == key
+            mock_bridge.send_special_key.assert_called_once_with(key)
+
+    def test_special_key_yes_no(self, client, mock_bridge):
+        """y/n キー送信が成功する"""
+        for key in ["y", "n"]:
+            mock_bridge.reset_mock()
+            response = client.post("/api/special-key", json={"key": key})
+            assert response.status_code == 200
+            data = response.json()
+            assert data["status"] == "sent"
+            assert data["key"] == key
+            mock_bridge.send_special_key.assert_called_once_with(key)
+
+    def test_special_key_space(self, client, mock_bridge):
+        """Spaceキー送信が成功する"""
+        response = client.post("/api/special-key", json={"key": "Space"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "sent"
+        assert data["key"] == "Space"
+
+    def test_special_key_bspace(self, client, mock_bridge):
+        """BSpace (Backspace) キー送信が成功する"""
+        response = client.post("/api/special-key", json={"key": "BSpace"})
+        assert response.status_code == 200
+        data = response.json()
+        assert data["status"] == "sent"
+        assert data["key"] == "BSpace"

@@ -689,6 +689,199 @@ section h2::before {
     z-index: 1;
 }
 
+/* ===== TUI操作パネル ===== */
+.tui-panel {
+    margin-top: 14px;
+    padding: 14px;
+    border-radius: var(--radius);
+    border: 2px solid rgba(90, 50, 20, 0.55);
+    background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.12'/%3E%3C/svg%3E"),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.25), transparent),
+        linear-gradient(180deg, var(--paper), var(--paper2));
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
+}
+
+.tui-panel-toggle {
+    cursor: pointer;
+    user-select: none;
+}
+
+.tui-panel-toggle:hover {
+    opacity: 0.8;
+}
+
+#tui-toggle-icon {
+    display: inline-block;
+    transition: transform 0.2s;
+}
+
+.tui-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    gap: 14px;
+}
+
+.tui-group h3 {
+    margin: 0 0 8px;
+    font-weight: 900;
+    font-size: 14px;
+    color: var(--wood2);
+    border-bottom: 1px solid rgba(120, 70, 25, 0.35);
+    padding-bottom: 4px;
+}
+
+/* TUIキーボタン共通 */
+.tui-key {
+    padding: 10px 12px;
+    border-radius: 8px;
+    border: 2px solid rgba(90, 50, 20, 0.55);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent),
+        linear-gradient(180deg, #f0dcae, #e0c487);
+    color: var(--ink);
+    font-weight: 800;
+    font-size: 14px;
+    cursor: pointer;
+    box-shadow:
+        0 4px 0 rgba(90, 60, 25, 0.55),
+        0 8px 14px rgba(0, 0, 0, 0.25);
+    transition: transform 0.05s, box-shadow 0.05s;
+    position: relative;
+    overflow: hidden;
+}
+
+.tui-key:active {
+    transform: translateY(3px);
+    box-shadow:
+        0 1px 0 rgba(90, 60, 25, 0.55),
+        0 4px 8px rgba(0, 0, 0, 0.25);
+}
+
+/* 決定系ボタン: 警告色 */
+.tui-key-critical {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent),
+        linear-gradient(180deg, #ffb8a0, #ff8865);
+    border-color: rgba(120, 20, 10, 0.65);
+    box-shadow:
+        0 4px 0 rgba(120, 40, 20, 0.65),
+        0 8px 14px rgba(0, 0, 0, 0.3);
+}
+
+.tui-key-critical .btn-text {
+    display: block;
+    position: relative;
+    z-index: 2;
+}
+
+.tui-key-critical .progress-bar {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    width: 0;
+    height: 4px;
+    background: rgba(177, 31, 42, 0.8);
+    transition: width 1s linear;
+    z-index: 1;
+}
+
+.tui-key-critical.holding .progress-bar {
+    width: 100%;
+}
+
+.tui-key-critical.activated {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.3), transparent),
+        linear-gradient(180deg, #90ee90, #60d060);
+    border-color: rgba(40, 100, 40, 0.7);
+}
+
+/* 方向キー配置 */
+.arrow-grid {
+    display: grid;
+    grid-template-areas:
+        ". up ."
+        "left down right";
+    gap: 6px;
+    justify-items: center;
+}
+
+.arrow-grid .tui-key:nth-child(1) {
+    grid-area: up;
+}
+.arrow-grid .tui-key:nth-child(2) {
+    grid-area: down;
+}
+.arrow-grid .tui-key:nth-child(3) {
+    grid-area: left;
+}
+.arrow-grid .tui-key:nth-child(4) {
+    grid-area: right;
+}
+
+.arrow-key {
+    width: 50px;
+    height: 50px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 20px;
+}
+
+/* 操作ボタン */
+.tui-buttons {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+
+/* 数字キー配置 */
+.number-grid {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 6px;
+}
+
+.number-key {
+    aspect-ratio: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Yes/No キー */
+.yn-key {
+    font-weight: 900;
+}
+
+/* モバイル対応 */
+@media (max-width: 640px) {
+    .tui-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .number-grid {
+        grid-template-columns: repeat(5, 1fr);
+    }
+
+    .arrow-key {
+        width: 45px;
+        height: 45px;
+        font-size: 18px;
+    }
+
+    .tui-key {
+        padding: 12px 14px;
+        font-size: 15px;
+        min-height: 44px;
+    }
+
+    #tui-toggle-icon {
+        font-size: 18px;
+    }
+}
+
 /* ===== 会話ログUI（Step 2） ===== */
 .chat-log-section {
     margin-top: 14px;
@@ -761,4 +954,61 @@ section h2::before {
 
 .raw-output-details[open] summary {
     margin-bottom: 14px;
+}
+
+/* ===== スクロールボタン ===== */
+.scroll-buttons {
+    position: fixed;
+    bottom: 24px;
+    right: 24px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    z-index: 100;
+}
+
+.scroll-btn {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    border: 3px solid rgba(90, 50, 20, 0.65);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent),
+        linear-gradient(180deg, var(--paper), var(--paper2));
+    color: var(--lacquer);
+    font-size: 20px;
+    font-weight: 900;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow:
+        0 4px 0 rgba(90, 60, 25, 0.55),
+        0 8px 14px rgba(0, 0, 0, 0.3);
+    transition: transform 0.1s, box-shadow 0.1s;
+}
+
+.scroll-btn:hover {
+    filter: brightness(1.05);
+    transform: translateY(-1px);
+}
+
+.scroll-btn:active {
+    transform: translateY(3px);
+    box-shadow:
+        0 1px 0 rgba(90, 60, 25, 0.55),
+        0 4px 8px rgba(0, 0, 0, 0.25);
+}
+
+@media (max-width: 640px) {
+    .scroll-buttons {
+        bottom: 16px;
+        right: 16px;
+    }
+
+    .scroll-btn {
+        width: 44px;
+        height: 44px;
+        font-size: 18px;
+    }
 }

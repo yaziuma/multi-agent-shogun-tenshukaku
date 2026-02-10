@@ -6,7 +6,7 @@
 # キャッシュ完全削除 + プロセス停止 + クリーン起動を一発で行う
 # 開発時のホットリロード（--reload）有効
 
-PROJECT_DIR="/home/quieter/projects/shogun-web"
+PROJECT_DIR="/home/quieter/projects/shogun-web-v2"
 CONFIG_FILE="$PROJECT_DIR/config/settings.yaml"
 
 # 色定義
@@ -57,7 +57,7 @@ echo ""
 echo -e "${YELLOW}[1/3] 既存プロセスを停止中...${NC}"
 
 # uvicornプロセスの検索と停止（shogun-web関連のみ）
-UVICORN_PIDS=$(ps aux | grep "[u]vicorn main:app" | grep "shogun-web" | awk '{print $2}')
+UVICORN_PIDS=$(ps aux | grep "[u]vicorn main:app" | grep "shogun-web-v2" | awk '{print $2}')
 if [ -n "$UVICORN_PIDS" ]; then
     echo "  → uvicornプロセスを発見: $UVICORN_PIDS"
     for pid in $UVICORN_PIDS; do

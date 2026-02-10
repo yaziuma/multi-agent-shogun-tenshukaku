@@ -25,6 +25,76 @@
             <div id="command-result"></div>
         </section>
 
+        <!-- TUI操作パネル -->
+        <section class="tui-panel">
+            <h2 class="tui-panel-toggle" id="tui-panel-toggle">
+                <span id="tui-toggle-icon">▶</span> 🎮 TUI操作パネル
+            </h2>
+            <div class="tui-grid" id="tui-grid" style="display: none;">
+                <!-- 方向キー -->
+                <div class="tui-group">
+                    <h3>方向キー</h3>
+                    <div class="arrow-grid">
+                        <button type="button" class="tui-key arrow-key" data-key="Up">↑</button>
+                        <button type="button" class="tui-key arrow-key" data-key="Down">↓</button>
+                        <button type="button" class="tui-key arrow-key" data-key="Left">←</button>
+                        <button type="button" class="tui-key arrow-key" data-key="Right">→</button>
+                    </div>
+                </div>
+
+                <!-- 操作ボタン -->
+                <div class="tui-group">
+                    <h3>操作</h3>
+                    <div class="tui-buttons">
+                        <button type="button" class="tui-key tui-key-critical" data-key="Enter">
+                            <span class="btn-text">Enter</span>
+                            <span class="progress-bar"></span>
+                        </button>
+                        <button type="button" class="tui-key tui-key-critical" data-key="Escape">
+                            <span class="btn-text">Esc</span>
+                            <span class="progress-bar"></span>
+                        </button>
+                        <button type="button" class="tui-key" data-key="Tab">Tab</button>
+                        <button type="button" class="tui-key" data-key="BTab">Shift+Tab</button>
+                        <button type="button" class="tui-key" data-key="Space">Space</button>
+                        <button type="button" class="tui-key" data-key="BSpace">⌫ Back</button>
+                    </div>
+                </div>
+
+                <!-- 数字キー -->
+                <div class="tui-group">
+                    <h3>数字</h3>
+                    <div class="number-grid">
+                        <button type="button" class="tui-key number-key" data-key="1">1</button>
+                        <button type="button" class="tui-key number-key" data-key="2">2</button>
+                        <button type="button" class="tui-key number-key" data-key="3">3</button>
+                        <button type="button" class="tui-key number-key" data-key="4">4</button>
+                        <button type="button" class="tui-key number-key" data-key="5">5</button>
+                        <button type="button" class="tui-key number-key" data-key="6">6</button>
+                        <button type="button" class="tui-key number-key" data-key="7">7</button>
+                        <button type="button" class="tui-key number-key" data-key="8">8</button>
+                        <button type="button" class="tui-key number-key" data-key="9">9</button>
+                        <button type="button" class="tui-key number-key" data-key="0">0</button>
+                    </div>
+                </div>
+
+                <!-- Yes/No -->
+                <div class="tui-group">
+                    <h3>確認</h3>
+                    <div class="tui-buttons">
+                        <button type="button" class="tui-key yn-key tui-key-critical" data-key="y">
+                            <span class="btn-text">✓ Yes (y)</span>
+                            <span class="progress-bar"></span>
+                        </button>
+                        <button type="button" class="tui-key yn-key tui-key-critical" data-key="n">
+                            <span class="btn-text">✗ No (n)</span>
+                            <span class="progress-bar"></span>
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </section>
+
         <section class="chat-log-section">
             <h2>📝 会話ログ</h2>
             <div id="chat-log"></div>
@@ -40,6 +110,7 @@
     <div id="tab-monitor" class="tab-content">
         <section class="monitor-section">
         <h2>👁️ 全ペイン監視</h2>
+        <button id="clear-monitor-btn" class="clear-monitor-btn">🧹 表示クリア</button>
         <div id="monitor-grid" class="monitor-grid">
             <!-- WebSocketで動的に生成 -->
             <div class="monitor-loading">接続中...</div>
@@ -64,6 +135,12 @@
             {% include "partials/history.html" %}
         </section>
     </div>
+</div>
+
+<!-- スクロールボタン（全タブ共通・固定表示） -->
+<div class="scroll-buttons" id="scroll-buttons">
+    <button type="button" class="scroll-btn" id="scroll-top-btn" title="一番上へ" aria-label="一番上へスクロール" hx-disable>&#9650;</button>
+    <button type="button" class="scroll-btn" id="scroll-bottom-btn" title="一番下へ" aria-label="一番下へスクロール" hx-disable>&#9660;</button>
 </div>
 
 <style>
@@ -94,6 +171,22 @@
 .msg.system {
     opacity: .75;
     font-style: italic;
+}
+
+/* クリアボタン */
+.clear-monitor-btn {
+    margin: 10px 0;
+    padding: 8px 16px;
+    background: rgba(255,100,100,0.1);
+    border: 1px solid rgba(255,100,100,0.3);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    transition: all 0.2s;
+}
+.clear-monitor-btn:hover {
+    background: rgba(255,100,100,0.2);
+    border-color: rgba(255,100,100,0.5);
 }
 </style>
 
@@ -171,6 +264,115 @@ document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape') {
         e.preventDefault();
         sendEscapeKey();
+    }
+});
+
+// TUI操作パネル: 汎用キー送信関数
+function sendTuiKey(key) {
+    fetch('/api/special-key', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({key: key})
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'sent') {
+            document.getElementById('command-result').innerHTML = '<p style="color:green;">キー「' + key + '」を送信しました</p>';
+        } else {
+            document.getElementById('command-result').innerHTML = '<p style="color:red;">送信失敗: ' + (data.message || 'Unknown error') + '</p>';
+        }
+    })
+    .catch(err => {
+        document.getElementById('command-result').innerHTML = '<p style="color:red;">送信エラー: ' + err + '</p>';
+    });
+}
+
+// TUI操作パネル: 折り畳み機能
+document.getElementById('tui-panel-toggle').addEventListener('click', (e) => {
+    const grid = document.getElementById('tui-grid');
+    const icon = document.getElementById('tui-toggle-icon');
+    if (grid.style.display === 'none') {
+        grid.style.display = 'grid';
+        icon.textContent = '▼';
+    } else {
+        grid.style.display = 'none';
+        icon.textContent = '▶';
+    }
+});
+
+// TUI操作パネル: 長押し確認機能（決定系ボタン）
+const HOLD_DURATION = 1000; // 1秒
+const holdTimers = new Map();
+
+document.querySelectorAll('.tui-key').forEach(btn => {
+    const key = btn.getAttribute('data-key');
+    if (!key) return;
+
+    const isCritical = btn.classList.contains('tui-key-critical');
+
+    if (isCritical) {
+        // 決定系ボタン: 長押し（1秒）で発動
+        let pressStartTime = 0;
+        let holdTimer = null;
+        const progressBar = btn.querySelector('.progress-bar');
+
+        btn.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            pressStartTime = Date.now();
+            btn.classList.add('holding');
+
+            holdTimer = setTimeout(() => {
+                sendTuiKey(key);
+                btn.classList.remove('holding');
+                btn.classList.add('activated');
+                setTimeout(() => btn.classList.remove('activated'), 300);
+            }, HOLD_DURATION);
+        });
+
+        btn.addEventListener('mouseup', (e) => {
+            e.preventDefault();
+            if (holdTimer) {
+                clearTimeout(holdTimer);
+                holdTimer = null;
+            }
+            btn.classList.remove('holding');
+        });
+
+        btn.addEventListener('mouseleave', (e) => {
+            if (holdTimer) {
+                clearTimeout(holdTimer);
+                holdTimer = null;
+            }
+            btn.classList.remove('holding');
+        });
+
+        // タッチデバイス対応
+        btn.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            pressStartTime = Date.now();
+            btn.classList.add('holding');
+
+            holdTimer = setTimeout(() => {
+                sendTuiKey(key);
+                btn.classList.remove('holding');
+                btn.classList.add('activated');
+                setTimeout(() => btn.classList.remove('activated'), 300);
+            }, HOLD_DURATION);
+        });
+
+        btn.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            if (holdTimer) {
+                clearTimeout(holdTimer);
+                holdTimer = null;
+            }
+            btn.classList.remove('holding');
+        });
+    } else {
+        // 通常ボタン: 即座に発動
+        btn.addEventListener('click', (e) => {
+            sendTuiKey(key);
+        });
     }
 });
 
@@ -385,5 +587,37 @@ function renderMonitorPanes(panes) {
         el.scrollTop = el.scrollHeight;
     });
 }
+
+// スクロールボタン: 一番上/一番下へスムーススクロール
+document.getElementById('scroll-top-btn').addEventListener('click', () => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+});
+document.getElementById('scroll-bottom-btn').addEventListener('click', () => {
+    window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+});
+
+// クリアボタン: 全ペインの表示履歴を消去（バックエンドスナップショット方式）
+document.getElementById('clear-monitor-btn').addEventListener('click', () => {
+    fetch('/api/monitor/clear', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'}
+    })
+    .then(res => res.json())
+    .then(data => {
+        if (data.status === 'cleared') {
+            // バックエンドがスナップショット保存完了
+            // ローカルキャッシュをクリア
+            Object.keys(monitorPanes).forEach(key => {
+                monitorPanes[key] = [];
+            });
+            renderMonitorPanes(monitorPanes);
+        } else {
+            console.error('Clear failed:', data.message);
+        }
+    })
+    .catch(err => {
+        console.error('Clear error:', err);
+    });
+});
 </script>
 {% endblock %}

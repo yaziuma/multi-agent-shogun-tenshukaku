@@ -229,7 +229,7 @@ class TmuxBridge:
         Send a special key to the shogun pane (shogun:0.0).
 
         Args:
-            key: Special key name (e.g., "Escape")
+            key: Special key name (e.g., "Escape", "Enter", "Up", etc.)
 
         Returns:
             True if successful, False otherwise
@@ -237,8 +237,31 @@ class TmuxBridge:
         Raises:
             ValueError: If the key is not in the allowlist
         """
-        # allowlist: 将来拡張可能
-        ALLOWED_KEYS = {"Escape"}
+        # allowlist: TUI操作に必要なキーを許可
+        ALLOWED_KEYS = {
+            "Enter",
+            "Escape",
+            "Tab",
+            "BTab",  # Shift+Tab
+            "Up",
+            "Down",
+            "Left",
+            "Right",
+            "0",
+            "1",
+            "2",
+            "3",
+            "4",
+            "5",
+            "6",
+            "7",
+            "8",
+            "9",
+            "y",
+            "n",
+            "Space",
+            "BSpace",  # Backspace
+        }
         if key not in ALLOWED_KEYS:
             raise ValueError(
                 f"Key '{key}' is not allowed. Allowed keys: {ALLOWED_KEYS}"
