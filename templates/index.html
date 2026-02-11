@@ -101,7 +101,8 @@
         </section>
 
         <details class="raw-output-details">
-            <summary>🔄 tmux raw出力（折りたたみ）</summary>
+            <summary>🔄 tmux raw出力（折りたたみ）<span id="shogun-ws-status" class="ws-status ws-status-connecting">接続中...</span>
+            <button id="reconnect-shogun-btn" class="reconnect-shogun-btn reconnect-btn-hidden">再接続</button></summary>
             <div id="shogun-output" class="terminal"><pre>接続中...</pre></div>
         </details>
     </div>
@@ -110,7 +111,11 @@
     <div id="tab-monitor" class="tab-content">
         <section class="monitor-section">
         <h2>👁️ 全ペイン監視</h2>
-        <button id="clear-monitor-btn" class="clear-monitor-btn">🧹 表示クリア</button>
+        <div class="monitor-controls">
+            <button id="clear-monitor-btn" class="clear-monitor-btn">🧹 表示クリア</button>
+            <button id="reconnect-monitor-btn" class="reconnect-monitor-btn reconnect-btn-hidden">再接続</button>
+            <span id="monitor-ws-status" class="ws-status ws-status-connecting">接続中...</span>
+        </div>
         <div id="monitor-grid" class="monitor-grid">
             <!-- WebSocketで動的に生成 -->
             <div class="monitor-loading">接続中...</div>
@@ -175,13 +180,14 @@
 
 /* クリアボタン */
 .clear-monitor-btn {
-    margin: 10px 0;
+    margin: 0;
     padding: 8px 16px;
     background: rgba(255,100,100,0.1);
     border: 1px solid rgba(255,100,100,0.3);
     border-radius: 6px;
     cursor: pointer;
     font-size: 14px;
+    font-weight: 800;
     transition: all 0.2s;
 }
 .clear-monitor-btn:hover {
@@ -448,113 +454,337 @@ document.body.addEventListener('htmx:afterRequest', (e) => {
     }
 });
 
-// WebSocket でリアルタイム出力を受信（指揮タブ）— delta 対応
-const ws = new WebSocket(`ws://${location.host}/ws`);
-ws.onmessage = (e) => {
-    const data = JSON.parse(e.data);
-    const el = document.getElementById('shogun-output');
-    const wasAtBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 50;
-
-    if (data.type === 'noop') {
-        return; // 変更なし、何もしない
+// ===========================================================
+// ReconnectingWebSocket: 殿の最終確定仕様準拠
+// - onclose のみによる切断判定（A方式）
+// - リトライ上限3回、エクスポネンシャルバックオフ(1s->30s)
+// - UI表示遅延による瞬断非表示
+// - 閾値は全て /api/ws-config から取得（ハードコード禁止）
+// ===========================================================
+class ReconnectingWebSocket {
+    constructor(url, opts = {}) {
+        this.url = url;
+        this.onmessage = opts.onmessage || null;
+        this.onstatuschange = opts.onstatuschange || null;
+        this._baseDelay = opts.baseDelay || 1000;
+        this._maxDelay = opts.maxDelay || 30000;
+        this._maxRetries = opts.maxRetries || 3;
+        this._uiDelayMs = opts.uiDelayMs || 0;          // UI表示遅延閾値
+        this._currentDelay = this._baseDelay;
+        this._retryCount = 0;
+        this._reconnectTimer = null;
+        this._uiDelayTimer = null;
+        this._ws = null;
+        this._intentionalClose = false;
+        this._internalState = 'connecting';  // 内部状態
+        this._statusElementId = opts.statusElementId || null;
+        this._reconnectBtnId = opts.reconnectBtnId || null;
+        this.connect();
     }
 
-    if (data.type === 'reset') {
-        // フル再送：全置換
-        const fullText = data.lines.join('\n');
-        updateRawOutput(fullText);
-        // 会話ログには新しいメッセージとして追加
-        if (fullText.trim()) {
-            addChatMessage(fullText.trim(), 'shogun');
+    connect() {
+        this._clearReconnectTimer();
+        // 既存のWebSocketがあれば閉じる
+        if (this._ws) {
+            this._intentionalClose = true;
+            try { this._ws.close(); } catch (e) { /* ignore */ }
+            this._ws = null;
         }
-        if (wasAtBottom) {
-            el.scrollTop = el.scrollHeight;
+        this._intentionalClose = false;
+        this._internalState = 'connecting';
+        this._updateUI('connecting');
+        try {
+            this._ws = new WebSocket(this.url);
+        } catch (err) {
+            this._handleDisconnect();
+            return;
         }
-        return;
+
+        this._ws.onopen = () => {
+            this._currentDelay = this._baseDelay;
+            this._retryCount = 0;
+            this._internalState = 'connected';
+            // 瞬断中のUI遅延タイマーをキャンセル（瞬断をUI上完全無視）
+            this._clearUiDelayTimer();
+            this._updateUI('connected');
+            this._hideReconnectBtn();
+        };
+
+        this._ws.onmessage = (e) => {
+            if (this.onmessage) this.onmessage(e);
+        };
+
+        this._ws.onclose = () => {
+            // onclose による切断判定（A方式のみ）
+            if (!this._intentionalClose) {
+                this._handleDisconnect();
+            }
+        };
     }
 
-    if (data.type === 'delta') {
-        // 増分：新しい行を追記
-        const newText = data.lines.join('\n');
-        if (newText.trim()) {
-            appendToRawOutput(newText);
-            addChatMessage(newText.trim(), 'shogun');
+    reconnect() {
+        // 手動再接続: リトライカウントリセット
+        this._clearReconnectTimer();
+        this._clearUiDelayTimer();
+        this._retryCount = 0;
+        this._currentDelay = this._baseDelay;
+        if (this._ws) {
+            this._intentionalClose = true;
+            try { this._ws.close(); } catch (e) { /* ignore */ }
+            this._ws = null;
         }
-        if (wasAtBottom) {
-            el.scrollTop = el.scrollHeight;
-        }
-        return;
+        this.connect();
     }
 
-    // 後方互換: 旧形式（プレーンテキスト）の場合
-    if (data.output !== undefined) {
-        // 10KB（10000文字）を超える場合は末尾10KBのみ使用
-        let output = data.output;
-        if (output.length > 10000) {
-            output = output.slice(-10000);
+    _handleDisconnect() {
+        this._internalState = 'disconnected';
+
+        // リトライ上限チェック
+        if (this._retryCount >= this._maxRetries) {
+            // リトライ上限到達: 自動再接続停止
+            this._clearUiDelayTimer();
+            this._updateUI('failed');
+            this._showReconnectBtn();
+            return;
         }
-        updateRawOutput(output);
-        if (output.trim()) {
-            addChatMessage(output.trim(), 'shogun');
-        }
-        if (wasAtBottom) {
-            el.scrollTop = el.scrollHeight;
+
+        // UI表示: 閾値時間経過後のみ「切断」表示（瞬断は無視）
+        this._startUiDelayTimer();
+
+        // 自動再接続スケジュール
+        this._scheduleReconnect();
+    }
+
+    _scheduleReconnect() {
+        this._clearReconnectTimer();
+        this._retryCount++;
+        const delay = this._currentDelay;
+        this._reconnectTimer = setTimeout(() => {
+            this._currentDelay = Math.min(this._currentDelay * 2, this._maxDelay);
+            // 再接続試行中はUI更新
+            this._clearUiDelayTimer();
+            this._updateUI('reconnecting');
+            this.connect();
+        }, delay);
+    }
+
+    _startUiDelayTimer() {
+        this._clearUiDelayTimer();
+        if (this._uiDelayMs > 0) {
+            this._uiDelayTimer = setTimeout(() => {
+                this._uiDelayTimer = null;
+                // 閾値経過後もまだ切断状態なら「切断」表示
+                if (this._internalState === 'disconnected') {
+                    this._updateUI('disconnected');
+                }
+            }, this._uiDelayMs);
+        } else {
+            // uiDelayMs=0 の場合は即座に表示
+            this._updateUI('disconnected');
         }
     }
-};
-ws.onclose = () => {
-    document.getElementById('shogun-output').innerHTML = '<pre>接続が切断されました。ページをリロードしてください。</pre>';
-};
 
-// 監視タブ: 全ペインリアルタイム表示（delta 対応）
+    _clearReconnectTimer() {
+        if (this._reconnectTimer) {
+            clearTimeout(this._reconnectTimer);
+            this._reconnectTimer = null;
+        }
+    }
+
+    _clearUiDelayTimer() {
+        if (this._uiDelayTimer) {
+            clearTimeout(this._uiDelayTimer);
+            this._uiDelayTimer = null;
+        }
+    }
+
+    _updateUI(displayStatus) {
+        const el = this._statusElementId ? document.getElementById(this._statusElementId) : null;
+        if (!el) return;
+
+        el.className = 'ws-status';
+        switch (displayStatus) {
+            case 'connecting':
+                el.className += ' ws-status-connecting';
+                el.textContent = '接続中...';
+                break;
+            case 'connected':
+                el.className += ' ws-status-connected';
+                el.textContent = '';
+                break;
+            case 'disconnected':
+                el.className += ' ws-status-disconnected';
+                el.textContent = '切断';
+                break;
+            case 'reconnecting':
+                el.className += ' ws-status-reconnecting';
+                el.textContent = '再接続中...';
+                break;
+            case 'failed':
+                el.className += ' ws-status-failed';
+                el.textContent = '接続が切断されました';
+                break;
+        }
+
+        if (this.onstatuschange) {
+            this.onstatuschange(displayStatus);
+        }
+    }
+
+    _showReconnectBtn() {
+        const btn = this._reconnectBtnId ? document.getElementById(this._reconnectBtnId) : null;
+        if (btn) btn.classList.remove('reconnect-btn-hidden');
+    }
+
+    _hideReconnectBtn() {
+        const btn = this._reconnectBtnId ? document.getElementById(this._reconnectBtnId) : null;
+        if (btn) btn.classList.add('reconnect-btn-hidden');
+    }
+
+    get readyState() {
+        return this._ws ? this._ws.readyState : WebSocket.CLOSED;
+    }
+}
+
+// ===========================================================
+// WebSocket初期化: /api/ws-config から設定取得後に接続開始
+// ===========================================================
 const monitorPanes = {}; // ペイン出力のローカルキャッシュ（行配列）
+let shogunWs = null;
+let monitorWs = null;
 
-const monitorWs = new WebSocket(`ws://${location.host}/ws/monitor`);
-monitorWs.onmessage = (e) => {
-    const data = JSON.parse(e.data);
-    if (data.type === 'monitor_update' && data.updates) {
-        // delta 対応: 変更があったpaneのみ更新
-        Object.entries(data.updates).forEach(([paneId, deltaResult]) => {
-            if (deltaResult.type === 'reset') {
-                // フル再送：全置換
-                monitorPanes[paneId] = deltaResult.lines;
-            } else if (deltaResult.type === 'delta') {
-                // 増分：追記
-                if (!monitorPanes[paneId]) {
-                    monitorPanes[paneId] = [];
-                }
-                monitorPanes[paneId].push(...deltaResult.lines);
-                // 行数上限チェック: 5000行を超えたら末尾5000行のみ保持
-                if (monitorPanes[paneId].length > 5000) {
-                    monitorPanes[paneId] = monitorPanes[paneId].slice(-5000);
-                }
-            }
-            // noop の場合は何もしない
-        });
-        renderMonitorPanes(monitorPanes);
-        return;
+(async function initWebSockets() {
+    // 設定値取得（全閾値はsettings.yamlから算出、ハードコード禁止）
+    let wsConfig;
+    try {
+        const res = await fetch('/api/ws-config');
+        wsConfig = await res.json();
+    } catch (e) {
+        // フォールバック: API失敗時はデフォルト値（settings.yamlのデフォルトと同じ）
+        wsConfig = {
+            monitor: { base_interval_ms: 5000, max_interval_ms: 10000 },
+            shogun: { base_interval_ms: 1000, max_interval_ms: 3000 }
+        };
     }
 
-    // 後方互換: 旧形式（プレーンテキスト）の場合
-    if (data.updates) {
-        Object.entries(data.updates).forEach(([paneId, output]) => {
-            // 旧形式は文字列なので行配列に変換
-            if (typeof output === 'string') {
-                // 10KB（10000文字）を超える場合は末尾10KBのみ使用
-                let processedOutput = output;
+    // 閾値算出（settings.yamlから取得、ハードコード禁止）
+    // 指揮タブ(shogun): uiDelay = max_interval_ms（瞬断無視の閾値）
+    const shogunUiDelayMs = wsConfig.shogun.max_interval_ms;
+
+    // 監視タブ(monitor): uiDelay = base_interval_ms（瞬断無視の閾値）
+    const monitorUiDelayMs = wsConfig.monitor.base_interval_ms;
+
+    // 指揮タブ WebSocket
+    shogunWs = new ReconnectingWebSocket(`ws://${location.host}/ws`, {
+        uiDelayMs: shogunUiDelayMs,
+        maxRetries: 3,
+        statusElementId: 'shogun-ws-status',
+        reconnectBtnId: 'reconnect-shogun-btn',
+        onmessage: (e) => {
+            const data = JSON.parse(e.data);
+            const el = document.getElementById('shogun-output');
+            const wasAtBottom = el.scrollHeight - el.scrollTop <= el.clientHeight + 50;
+
+            if (data.type === 'noop') {
+                return;
+            }
+
+            if (data.type === 'reset') {
+                const fullText = data.lines.join('\n');
+                updateRawOutput(fullText);
+                if (fullText.trim()) {
+                    addChatMessage(fullText.trim(), 'shogun');
+                }
+                if (wasAtBottom) {
+                    el.scrollTop = el.scrollHeight;
+                }
+                return;
+            }
+
+            if (data.type === 'delta') {
+                const newText = data.lines.join('\n');
+                if (newText.trim()) {
+                    appendToRawOutput(newText);
+                    addChatMessage(newText.trim(), 'shogun');
+                }
+                if (wasAtBottom) {
+                    el.scrollTop = el.scrollHeight;
+                }
+                return;
+            }
+
+            if (data.output !== undefined) {
+                let output = data.output;
                 if (output.length > 10000) {
-                    processedOutput = output.slice(-10000);
+                    output = output.slice(-10000);
                 }
-                monitorPanes[paneId] = processedOutput.split('\n');
+                updateRawOutput(output);
+                if (output.trim()) {
+                    addChatMessage(output.trim(), 'shogun');
+                }
+                if (wasAtBottom) {
+                    el.scrollTop = el.scrollHeight;
+                }
             }
-        });
-        renderMonitorPanes(monitorPanes);
-    }
-};
-monitorWs.onclose = () => {
-    const grid = document.getElementById('monitor-grid');
-    if (grid) grid.innerHTML = '<div class="monitor-loading">接続が切断されました。ページをリロードしてください。</div>';
-};
+        },
+        onstatuschange: (status) => {
+            // 切断時: 既存コンテンツは保持（白画面にしない）
+        }
+    });
+
+    // 監視タブ WebSocket
+    monitorWs = new ReconnectingWebSocket(`ws://${location.host}/ws/monitor`, {
+        uiDelayMs: monitorUiDelayMs,
+        maxRetries: 3,
+        statusElementId: 'monitor-ws-status',
+        reconnectBtnId: 'reconnect-monitor-btn',
+        onmessage: (e) => {
+            const data = JSON.parse(e.data);
+            if (data.type === 'monitor_update' && data.updates) {
+                Object.entries(data.updates).forEach(([paneId, deltaResult]) => {
+                    if (deltaResult.type === 'reset') {
+                        monitorPanes[paneId] = deltaResult.lines;
+                    } else if (deltaResult.type === 'delta') {
+                        if (!monitorPanes[paneId]) {
+                            monitorPanes[paneId] = [];
+                        }
+                        monitorPanes[paneId].push(...deltaResult.lines);
+                        if (monitorPanes[paneId].length > 5000) {
+                            monitorPanes[paneId] = monitorPanes[paneId].slice(-5000);
+                        }
+                    }
+                });
+                renderMonitorPanes(monitorPanes);
+                return;
+            }
+
+            if (data.updates) {
+                Object.entries(data.updates).forEach(([paneId, output]) => {
+                    if (typeof output === 'string') {
+                        let processedOutput = output;
+                        if (output.length > 10000) {
+                            processedOutput = output.slice(-10000);
+                        }
+                        monitorPanes[paneId] = processedOutput.split('\n');
+                    }
+                });
+                renderMonitorPanes(monitorPanes);
+            }
+        },
+        onstatuschange: (status) => {
+            // 切断時: monitorPanes キャッシュを保持し、既存カードをそのまま表示
+        }
+    });
+
+    // 再接続ボタン: 手動再接続
+    document.getElementById('reconnect-shogun-btn').addEventListener('click', () => {
+        if (shogunWs) shogunWs.reconnect();
+    });
+
+    document.getElementById('reconnect-monitor-btn').addEventListener('click', () => {
+        if (monitorWs) monitorWs.reconnect();
+    });
+})();
 
 // ペイン描画関数（delta 対応: 行配列をレンダリング）
 function renderMonitorPanes(panes) {
@@ -619,5 +849,6 @@ document.getElementById('clear-monitor-btn').addEventListener('click', () => {
         console.error('Clear error:', err);
     });
 });
+
 </script>
 {% endblock %}
