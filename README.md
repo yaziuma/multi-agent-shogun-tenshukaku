@@ -14,21 +14,27 @@ Tenshukaku provides a browser-based interface for commanding and monitoring a fl
 
 ### Command Tab (指揮)
 
-Send messages directly to the Shogun agent's tmux pane. Supports Ctrl+Enter for quick submission and an Escape key button to interrupt Claude Code when needed. Pane output updates every second in real time. Includes Top/Bottom scroll buttons for navigating long output.
+Send messages directly to the Shogun agent's tmux pane. Supports Ctrl+Enter for quick submission and an Escape key button to interrupt Claude Code when needed. Includes Top/Bottom scroll buttons for navigating long output.
 
-A collapsible **TUI Operation Panel** provides direct keyboard input: arrow keys, Enter, Tab, Ctrl+C, and other special keys — useful for navigating interactive CLI interfaces without leaving the browser.
+A collapsible **TUI Operation Panel** provides direct keyboard input: arrow keys, Enter, Tab, Space, Backspace, number keys (0-9), and Yes/No confirmation buttons — useful for navigating interactive CLI interfaces without leaving the browser. Critical keys (Enter, Escape, Yes, No) require a 1-second long-press to prevent accidental activation.
+
+The **Chat Log** section displays a conversation-style view of interactions: user messages appear in blue and shogun responses in gold. The raw tmux pane output is available in a collapsible section below the chat log.
 
 ![Command Tab](assets/screenshots/tab-command.png)
 
 ### Monitor Tab (監視)
 
-Real-time grid view of all agent panes. Update interval is configurable (default: 5 seconds). A **Clear Display** button resets the monitor view without affecting tmux pane history (non-destructive).
+Real-time grid view of all agent panes using WebSocket delta updates for efficient bandwidth usage. Update interval is configurable (default: 5 seconds). A **Clear Display** button resets the monitor view without affecting tmux pane history (non-destructive). User input lines are highlighted in light blue for easy identification.
 
 ![Monitor Tab](assets/screenshots/tab-monitor.png)
 
 ### Dashboard Tab (戦況)
 
-Renders the `dashboard.md` battle report — task progress, blockers, skill candidates, and daily achievements — updated automatically every 5 seconds.
+Renders the `dashboard.md` battle report — task progress, blockers, skill candidates, and daily achievements. Content is loaded on demand via a manual **Refresh** button (auto-refresh has been removed to reduce unnecessary API calls).
+
+Supports two display modes via a **Raw/Rendered toggle**:
+- **Rendered mode** (default): Parses markdown using [marked.js](https://marked.js.org/) with [github-markdown-css](https://github.com/sindresorhus/github-markdown-css), styled with custom Sengoku-era theme overrides for tables, headings, code blocks, blockquotes, and other elements.
+- **Raw mode**: Displays the original markdown source text as-is.
 
 ![Dashboard Tab](assets/screenshots/tab-dashboard.png)
 
@@ -45,12 +51,13 @@ Browser (HTTP + WebSocket)
     │
     ├── GET  /              → Main SPA (Jinja2 templates + htmx)
     ├── POST /api/command   → tmux send-keys to shogun pane
-    ├── POST /api/special-key → Send Escape key (allowlist-based)
+    ├── POST /api/special-key → Send special keys (allowlist-based)
     ├── POST /api/monitor/clear → Clear monitor display (non-destructive)
-    ├── GET  /api/dashboard → Read dashboard.md
+    ├── GET  /api/dashboard → Read dashboard.md (raw markdown in data container)
     ├── GET  /api/history   → Read shogun_to_karo.yaml
-    ├── WS   /ws            → Real-time shogun pane output
-    └── WS   /ws/monitor    → Real-time all-pane monitoring
+    ├── GET  /api/ws-config → WebSocket reconnection configuration
+    ├── WS   /ws            → Real-time shogun pane output (delta)
+    └── WS   /ws/monitor    → Real-time all-pane monitoring (delta)
     │
     ▼
 FastAPI + Uvicorn
@@ -69,10 +76,19 @@ tmux sessions (shogun / multiagent)
 | Backend | FastAPI + Uvicorn |
 | Templates | Jinja2 |
 | Frontend | htmx 2.x + Vanilla JS |
-| WebSocket | FastAPI native WebSocket |
+| WebSocket | FastAPI native WebSocket (delta diff delivery) |
+| Markdown Rendering | marked.js + github-markdown-css |
 | tmux Integration | libtmux 0.53+ |
 | Styling | Custom CSS (Sengoku-era theme) |
 | Package Manager | uv |
+
+### WebSocket Reconnection
+
+WebSocket connections use a `ReconnectingWebSocket` class with:
+- Automatic reconnection with exponential backoff (1s to 30s)
+- Maximum 3 retry attempts before showing a manual **Reconnect** button
+- UI display delay to suppress transient disconnection indicators
+- All thresholds derived from `settings.yaml` via `/api/ws-config` (no hardcoded values)
 
 ## Setup
 
@@ -99,7 +115,7 @@ Edit `config/settings.yaml`:
 ```yaml
 server:
   host: "0.0.0.0"
-  port: 30000
+  port: 30001
 
 bakuhu:
   base_path: "/path/to/multi-agent-bakuhu"
@@ -136,10 +152,10 @@ ui:
 ./restart.sh
 
 # Or manually
-uv run uvicorn main:app --host 0.0.0.0 --port 30000
+uv run uvicorn main:app --host 0.0.0.0 --port 30001
 ```
 
-Access at `http://<your-host>:30000`
+Access at `http://<your-host>:30001`
 
 ## Project Structure
 
@@ -149,26 +165,36 @@ multi-agent-shogun-tenshukaku/
 ├── ws/
 │   ├── broadcasters.py     # Broadcast managers (shogun + monitor)
 │   ├── dashboard_cache.py  # mtime-based dashboard file cache
+│   ├── delta.py            # Delta diff computation for WebSocket updates
 │   ├── handlers.py         # WebSocket handlers (shogun + monitor)
 │   ├── runtime.py          # Thread pool executor + async lock
 │   ├── state.py            # Pane state diff detection (sha1)
 │   └── tmux_bridge.py      # tmux session interaction layer
 ├── templates/
-│   ├── base.html            # Base template (header, footer, assets)
+│   ├── base.html            # Base template (header, footer, CDN assets)
 │   ├── index.html           # Main SPA (4 tabs + JS)
 │   └── partials/
-│       └── history.html     # Command history partial
+│       ├── history.html     # Command history partial
+│       ├── output.html      # Pane output partial
+│       └── status.html      # Status display partial
 ├── static/
-│   └── style.css            # Sengoku-era themed CSS
+│   └── style.css            # Sengoku-era themed CSS (incl. markdown overrides)
 ├── config/
 │   └── settings.yaml        # Server, bakuhu path, tmux & monitor configuration
 ├── tests/
-│   ├── test_api.py          # API endpoint tests
-│   ├── test_broadcasters.py # Broadcaster unit tests
-│   ├── test_monitor.py      # Monitor WebSocket tests
-│   ├── test_tmux_bridge.py  # TmuxBridge unit tests
-│   └── test_ws_core.py      # PaneState & DashboardCache tests
+│   ├── test_api.py                      # API endpoint tests
+│   ├── test_broadcasters.py             # Broadcaster unit tests
+│   ├── test_dashboard_markdown.py       # Dashboard markdown rendering tests (Playwright)
+│   ├── test_dashboard_refresh.py        # Dashboard manual refresh tests (Playwright)
+│   ├── test_dashboard_table_dark_theme.py # Table dark theme CSS tests (Playwright)
+│   ├── test_delta.py                    # Delta diff computation tests
+│   ├── test_monitor.py                  # Monitor WebSocket tests
+│   ├── test_sanitize.py                 # Input sanitization tests
+│   ├── test_tmux_bridge.py              # TmuxBridge unit tests
+│   ├── test_ws_core.py                  # PaneState & DashboardCache tests
+│   └── test_ws_endpoints.py             # WebSocket endpoint tests
 ├── start.sh                 # Safe startup script
+├── restart.sh               # Development restart script
 ├── pyproject.toml           # Project metadata & dependencies
 └── assets/
     └── screenshots/         # UI screenshots

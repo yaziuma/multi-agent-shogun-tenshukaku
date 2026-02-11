@@ -14,21 +14,27 @@
 
 ### 指揮タブ
 
-将軍エージェントのtmuxペインに直接メッセージを送信する。Ctrl+Enterによるクイック送信と、Claude Codeの割り込みに使うEscapeキー送信ボタンを備える。ペイン出力は1秒間隔でリアルタイム更新。Top/Bottomスクロールボタンで長い出力のナビゲーションが可能。
+将軍エージェントのtmuxペインに直接メッセージを送信する。Ctrl+Enterによるクイック送信と、Claude Codeの割り込みに使うEscapeキー送信ボタンを備える。Top/Bottomスクロールボタンで長い出力のナビゲーションが可能。
 
-折りたたみ式の **TUI操作パネル** から、方向キー、Enter、Tab、Ctrl+Cなどのキーボード入力を直接送信可能。ブラウザを離れることなく対話型CLIインターフェースを操作できる。
+折りたたみ式の **TUI操作パネル** から、方向キー、Enter、Tab、Space、Backspace、数字キー（0-9）、Yes/No確認ボタンなどのキーボード入力を直接送信可能。ブラウザを離れることなく対話型CLIインターフェースを操作できる。決定系キー（Enter、Escape、Yes、No）は誤操作防止のため1秒長押しで発動する。
+
+**会話ログ** セクションでは、対話形式のビューを表示する。ユーザーの送信メッセージは青色、将軍の応答は金色で表示される。tmuxペインの生出力は会話ログの下の折りたたみセクションで確認可能。
 
 ![指揮タブ](assets/screenshots/tab-command.png)
 
 ### 監視タブ
 
-全エージェントペインをグリッドレイアウトでリアルタイム表示。更新間隔は設定可能（デフォルト5秒）。**監視クリア** ボタンでtmuxペイン履歴に影響を与えずに表示をリセット可能（非破壊的）。
+全エージェントペインをグリッドレイアウトでリアルタイム表示。WebSocketデルタ更新により効率的な帯域使用を実現。更新間隔は設定可能（デフォルト5秒）。**表示クリア** ボタンでtmuxペイン履歴に影響を与えずに表示をリセット可能（非破壊的）。ユーザー入力行はライトブルーでハイライトされ、視認性が高い。
 
 ![監視タブ](assets/screenshots/tab-monitor.png)
 
 ### 戦況タブ
 
-`dashboard.md` の戦況報告書をレンダリング。タスク進行状況、ブロッカー、スキル候補、本日の戦果を5秒ごとに自動更新。
+`dashboard.md` の戦況報告書をレンダリング。タスク進行状況、ブロッカー、スキル候補、本日の戦果を表示。コンテンツは手動 **更新** ボタンによるオンデマンド読み込み（不要なAPIコールを削減するため自動更新は廃止）。
+
+**Raw/Renderedトグル** による2つの表示モードに対応:
+- **Renderedモード**（デフォルト）: [marked.js](https://marked.js.org/) と [github-markdown-css](https://github.com/sindresorhus/github-markdown-css) を使用してMarkdownをパース。テーブル、見出し、コードブロック、引用など各要素に戦国テーマのカスタムCSS適用。
+- **Rawモード**: 元のMarkdownソーステキストをそのまま表示。
 
 ![戦況タブ](assets/screenshots/tab-dashboard.png)
 
@@ -45,12 +51,13 @@
     │
     ├── GET  /              → メインSPA（Jinja2テンプレート + htmx）
     ├── POST /api/command   → tmux send-keys で将軍ペインに送信
-    ├── POST /api/special-key → Escキー送信（許可リスト方式）
+    ├── POST /api/special-key → 特殊キー送信（許可リスト方式）
     ├── POST /api/monitor/clear → 監視表示クリア（非破壊的）
-    ├── GET  /api/dashboard → dashboard.md 読み取り
+    ├── GET  /api/dashboard → dashboard.md 読み取り（データコンテナで生markdown返却）
     ├── GET  /api/history   → shogun_to_karo.yaml 読み取り
-    ├── WS   /ws            → 将軍ペインのリアルタイム出力
-    └── WS   /ws/monitor    → 全ペインリアルタイム監視
+    ├── GET  /api/ws-config → WebSocket再接続設定
+    ├── WS   /ws            → 将軍ペインのリアルタイム出力（デルタ配信）
+    └── WS   /ws/monitor    → 全ペインリアルタイム監視（デルタ配信）
     │
     ▼
 FastAPI + Uvicorn
@@ -69,10 +76,19 @@ tmuxセッション (shogun / multiagent)
 | バックエンド | FastAPI + Uvicorn |
 | テンプレート | Jinja2 |
 | フロントエンド | htmx 2.x + Vanilla JS |
-| WebSocket | FastAPI ネイティブ WebSocket |
+| WebSocket | FastAPI ネイティブ WebSocket（デルタ差分配信） |
+| Markdownレンダリング | marked.js + github-markdown-css |
 | tmux連携 | libtmux 0.53+ |
 | スタイリング | カスタムCSS（戦国テーマ） |
 | パッケージ管理 | uv |
+
+### WebSocket再接続
+
+WebSocket接続は `ReconnectingWebSocket` クラスにより以下の機能を提供:
+- 指数バックオフによる自動再接続（1秒〜30秒）
+- 最大3回のリトライ後に手動 **再接続** ボタンを表示
+- 瞬断非表示のためのUI表示遅延
+- 全閾値を `settings.yaml` から `/api/ws-config` 経由で取得（ハードコード禁止）
 
 ## セットアップ
 
@@ -99,7 +115,7 @@ uv sync
 ```yaml
 server:
   host: "0.0.0.0"
-  port: 30000
+  port: 30001
 
 bakuhu:
   base_path: "/path/to/multi-agent-bakuhu"
@@ -136,10 +152,10 @@ ui:
 ./restart.sh
 
 # 手動起動
-uv run uvicorn main:app --host 0.0.0.0 --port 30000
+uv run uvicorn main:app --host 0.0.0.0 --port 30001
 ```
 
-`http://<ホスト>:30000` でアクセス。
+`http://<ホスト>:30001` でアクセス。
 
 ## プロジェクト構成
 
@@ -149,26 +165,36 @@ multi-agent-shogun-tenshukaku/
 ├── ws/
 │   ├── broadcasters.py     # ブロードキャストマネージャ（将軍 + 監視）
 │   ├── dashboard_cache.py  # mtime ベースのダッシュボードキャッシュ
+│   ├── delta.py            # WebSocket更新用デルタ差分計算
 │   ├── handlers.py         # WebSocketハンドラ（将軍 + 監視）
 │   ├── runtime.py          # スレッドプール + 非同期ロック
 │   ├── state.py            # ペイン状態の差分検出（sha1）
 │   └── tmux_bridge.py      # tmuxセッション操作レイヤー
 ├── templates/
-│   ├── base.html            # ベーステンプレート（ヘッダ、フッタ、アセット）
+│   ├── base.html            # ベーステンプレート（ヘッダ、フッタ、CDNアセット）
 │   ├── index.html           # メインSPA（4タブ + JS）
 │   └── partials/
-│       └── history.html     # コマンド履歴パーシャル
+│       ├── history.html     # コマンド履歴パーシャル
+│       ├── output.html      # ペイン出力パーシャル
+│       └── status.html      # ステータス表示パーシャル
 ├── static/
-│   └── style.css            # 戦国テーマCSS
+│   └── style.css            # 戦国テーマCSS（Markdownオーバーライド含む）
 ├── config/
 │   └── settings.yaml        # サーバー・bakuhuパス・tmux・監視設定
 ├── tests/
-│   ├── test_api.py          # APIエンドポイントテスト
-│   ├── test_broadcasters.py # ブロードキャスターテスト
-│   ├── test_monitor.py      # 監視WebSocketテスト
-│   ├── test_tmux_bridge.py  # TmuxBridgeユニットテスト
-│   └── test_ws_core.py      # PaneState・DashboardCacheテスト
+│   ├── test_api.py                      # APIエンドポイントテスト
+│   ├── test_broadcasters.py             # ブロードキャスターテスト
+│   ├── test_dashboard_markdown.py       # ダッシュボードMarkdownレンダリングテスト（Playwright）
+│   ├── test_dashboard_refresh.py        # ダッシュボード手動更新テスト（Playwright）
+│   ├── test_dashboard_table_dark_theme.py # テーブルダークテーマCSSテスト（Playwright）
+│   ├── test_delta.py                    # デルタ差分計算テスト
+│   ├── test_monitor.py                  # 監視WebSocketテスト
+│   ├── test_sanitize.py                 # 入力サニタイズテスト
+│   ├── test_tmux_bridge.py              # TmuxBridgeユニットテスト
+│   ├── test_ws_core.py                  # PaneState・DashboardCacheテスト
+│   └── test_ws_endpoints.py             # WebSocketエンドポイントテスト
 ├── start.sh                 # 安全起動スクリプト
+├── restart.sh               # 開発用再起動スクリプト
 ├── pyproject.toml           # プロジェクトメタデータ & 依存関係
 └── assets/
     └── screenshots/         # UIスクリーンショット
