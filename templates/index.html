@@ -127,7 +127,10 @@
     <div class="tab-content" id="tab-dashboard">
         <section class="dashboard">
             <h2>📊 ダッシュボード</h2>
-            <div hx-get="/api/dashboard" hx-trigger="load, every 5s" hx-swap="innerHTML">
+            <div class="dashboard-controls">
+                <button type="button" id="dashboard-mode-toggle" class="dashboard-mode-btn" data-mode="rendered" hx-disable>📋 Rendered</button>
+            </div>
+            <div id="dashboard-content" hx-get="/api/dashboard" hx-trigger="load, every 5s" hx-swap="innerHTML">
                 Loading...
             </div>
         </section>
@@ -824,6 +827,54 @@ document.getElementById('scroll-top-btn').addEventListener('click', () => {
 });
 document.getElementById('scroll-bottom-btn').addEventListener('click', () => {
     window.scrollTo({ top: document.documentElement.scrollHeight, behavior: 'smooth' });
+});
+
+// ===========================================================
+// ダッシュボード: Markdown整形表示トグル
+// ===========================================================
+let dashboardMode = 'rendered'; // デフォルト: Rendered モード
+
+function applyDashboardMode() {
+    const rawDataEl = document.getElementById('dashboard-raw-data');
+    const displayEl = document.getElementById('dashboard-display');
+    if (!rawDataEl || !displayEl) return;
+
+    const rawText = rawDataEl.textContent;
+
+    if (dashboardMode === 'rendered') {
+        // marked.js でパースして整形HTML表示
+        displayEl.className = 'markdown-body';
+        displayEl.innerHTML = marked.parse(rawText);
+    } else {
+        // 生テキスト表示
+        displayEl.className = '';
+        const pre = document.createElement('pre');
+        pre.textContent = rawText;
+        displayEl.innerHTML = '';
+        displayEl.appendChild(pre);
+    }
+}
+
+// トグルボタン
+document.getElementById('dashboard-mode-toggle').addEventListener('click', () => {
+    const btn = document.getElementById('dashboard-mode-toggle');
+    if (dashboardMode === 'rendered') {
+        dashboardMode = 'raw';
+        btn.textContent = '📄 Raw';
+        btn.dataset.mode = 'raw';
+    } else {
+        dashboardMode = 'rendered';
+        btn.textContent = '📋 Rendered';
+        btn.dataset.mode = 'rendered';
+    }
+    applyDashboardMode();
+});
+
+// htmx: ダッシュボード更新後にモードを適用
+document.body.addEventListener('htmx:afterSettle', (e) => {
+    if (e.detail.target && e.detail.target.id === 'dashboard-content') {
+        applyDashboardMode();
+    }
 });
 
 // クリアボタン: 全ペインの表示履歴を消去（バックエンドスナップショット方式）

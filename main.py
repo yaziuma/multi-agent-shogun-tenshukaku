@@ -7,6 +7,7 @@ from fastapi import FastAPI, Form, HTTPException, Request, WebSocket
 from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
+from markupsafe import escape
 from pydantic import BaseModel
 
 from ws.broadcasters import AdaptivePoller, MonitorBroadcaster, ShogunBroadcaster
@@ -89,13 +90,18 @@ async def index(request: Request):
 
 @app.get("/api/dashboard", response_class=HTMLResponse)
 async def get_dashboard(request: Request):
-    """Return dashboard.md content."""
+    """Return dashboard.md content with raw markdown in a data container."""
     try:
         bridge = request.app.state.tmux_bridge
         content = bridge.read_dashboard()
-        return f"<pre>{content}</pre>"
+        escaped = escape(content)
+        return (
+            f'<div id="dashboard-raw-data" style="display:none">{escaped}</div>'
+            f'<div id="dashboard-display"></div>'
+        )
     except Exception as e:
-        return f"<pre>Error: {e}</pre>"
+        escaped_err = escape(str(e))
+        return f"<pre>Error: {escaped_err}</pre>"
 
 
 class SpecialKeyRequest(BaseModel):
