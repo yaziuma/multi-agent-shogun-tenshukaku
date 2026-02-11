@@ -124,7 +124,9 @@ class MonitorBroadcaster:
         content after this snapshot. Does NOT clear _pane_lines (preserves delta).
         """
         # Save current state as clear snapshot
-        self._clear_snapshot = {pane_id: lines.copy() for pane_id, lines in self._pane_lines.items()}
+        self._clear_snapshot = {
+            pane_id: lines.copy() for pane_id, lines in self._pane_lines.items()
+        }
 
         # Broadcast empty updates to all current subscribers
         if self.subscribers:
@@ -143,7 +145,10 @@ class MonitorBroadcaster:
             for ws in dead_sockets:
                 self.subscribers.discard(ws)
 
-        logger.info("MonitorBroadcaster: cleared (snapshot saved, %d panes)", len(self._clear_snapshot))
+        logger.info(
+            "MonitorBroadcaster: cleared (snapshot saved, %d panes)",
+            len(self._clear_snapshot),
+        )
 
     async def _loop(self) -> None:
         """Main broadcast loop with delta updates."""

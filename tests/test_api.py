@@ -277,3 +277,143 @@ class TestSpecialKeyNewKeys:
         data = response.json()
         assert data["status"] == "sent"
         assert data["key"] == "BSpace"
+
+
+class TestWsConfigAPI:
+    """GET /api/ws-config のテスト"""
+
+    def test_ws_config_returns_200(self, client):
+        """ws-config APIが200を返す"""
+        response = client.get("/api/ws-config")
+        assert response.status_code == 200
+
+    def test_ws_config_returns_json(self, client):
+        """ws-config APIがJSONを返す"""
+        response = client.get("/api/ws-config")
+        assert "application/json" in response.headers["content-type"]
+
+    def test_ws_config_contains_monitor_section(self, client):
+        """レスポンスにmonitorセクションが含まれる"""
+        response = client.get("/api/ws-config")
+        data = response.json()
+        assert "monitor" in data
+        assert "base_interval_ms" in data["monitor"]
+        assert "max_interval_ms" in data["monitor"]
+
+    def test_ws_config_contains_shogun_section(self, client):
+        """レスポンスにshogunセクションが含まれる"""
+        response = client.get("/api/ws-config")
+        data = response.json()
+        assert "shogun" in data
+        assert "base_interval_ms" in data["shogun"]
+        assert "max_interval_ms" in data["shogun"]
+
+    def test_ws_config_monitor_values_match_settings(self, client):
+        """monitor値がsettings.yamlの値と一致する"""
+        response = client.get("/api/ws-config")
+        data = response.json()
+        # config/settings.yaml: monitor.base_interval_ms=5000, max_interval_ms=10000
+        assert data["monitor"]["base_interval_ms"] == 5000
+        assert data["monitor"]["max_interval_ms"] == 10000
+
+    def test_ws_config_shogun_values_match_settings(self, client):
+        """shogun値がsettings.yamlの値と一致する"""
+        response = client.get("/api/ws-config")
+        data = response.json()
+        # config/settings.yaml: shogun.base_interval_ms=1000, max_interval_ms=3000
+        assert data["shogun"]["base_interval_ms"] == 1000
+        assert data["shogun"]["max_interval_ms"] == 3000
+
+    def test_ws_config_values_are_integers(self, client):
+        """全ての値が整数型である"""
+        response = client.get("/api/ws-config")
+        data = response.json()
+        assert isinstance(data["monitor"]["base_interval_ms"], int)
+        assert isinstance(data["monitor"]["max_interval_ms"], int)
+        assert isinstance(data["shogun"]["base_interval_ms"], int)
+        assert isinstance(data["shogun"]["max_interval_ms"], int)
+
+    def test_ws_config_with_custom_settings(self, client):
+        """app.state.settingsを変更した場合の値が反映される"""
+        from main import app
+
+        # カスタム設定を注入
+        original_settings = app.state.settings
+        app.state.settings = {
+            "monitor": {"base_interval_ms": 3000, "max_interval_ms": 8000},
+            "shogun": {"base_interval_ms": 500, "max_interval_ms": 2000},
+        }
+        try:
+            response = client.get("/api/ws-config")
+            data = response.json()
+            assert data["monitor"]["base_interval_ms"] == 3000
+            assert data["monitor"]["max_interval_ms"] == 8000
+            assert data["shogun"]["base_interval_ms"] == 500
+            assert data["shogun"]["max_interval_ms"] == 2000
+        finally:
+            app.state.settings = original_settings
+
+    def test_ws_config_with_missing_monitor_key(self, client):
+        """settingsにmonitorキーがない場合はデフォルト値を使用"""
+        from main import app
+
+        original_settings = app.state.settings
+        app.state.settings = {
+            "shogun": {"base_interval_ms": 1000, "max_interval_ms": 3000},
+        }
+        try:
+            response = client.get("/api/ws-config")
+            data = response.json()
+            # デフォルト値: monitor.base_interval_ms=5000, max_interval_ms=10000
+            assert data["monitor"]["base_interval_ms"] == 5000
+            assert data["monitor"]["max_interval_ms"] == 10000
+        finally:
+            app.state.settings = original_settings
+
+    def test_ws_config_with_missing_shogun_key(self, client):
+        """settingsにshogunキーがない場合はデフォルト値を使用"""
+        from main import app
+
+        original_settings = app.state.settings
+        app.state.settings = {
+            "monitor": {"base_interval_ms": 5000, "max_interval_ms": 10000},
+        }
+        try:
+            response = client.get("/api/ws-config")
+            data = response.json()
+            # デフォルト値: shogun.base_interval_ms=1000, max_interval_ms=3000
+            assert data["shogun"]["base_interval_ms"] == 1000
+            assert data["shogun"]["max_interval_ms"] == 3000
+        finally:
+            app.state.settings = original_settings
+
+    def test_ws_config_with_empty_settings(self, client):
+        """settingsが空の場合は全てデフォルト値"""
+        from main import app
+
+        original_settings = app.state.settings
+        app.state.settings = {}
+        try:
+            response = client.get("/api/ws-config")
+            data = response.json()
+            assert data["monitor"]["base_interval_ms"] == 5000
+            assert data["monitor"]["max_interval_ms"] == 10000
+            assert data["shogun"]["base_interval_ms"] == 1000
+            assert data["shogun"]["max_interval_ms"] == 3000
+        finally:
+            app.state.settings = original_settings
+
+
+class TestMonitorClearAPI:
+    """POST /api/monitor/clear のテスト"""
+
+    def test_monitor_clear_returns_200(self, client):
+        """モニタークリアAPIが200を返す"""
+        response = client.post("/api/monitor/clear")
+        assert response.status_code == 200
+
+    def test_monitor_clear_returns_cleared_status(self, client):
+        """レスポンスに status: cleared が含まれる"""
+        response = client.post("/api/monitor/clear")
+        data = response.json()
+        assert data["status"] == "cleared"

@@ -185,6 +185,24 @@ async def clear_monitor(request: Request):
         return {"status": "error", "message": str(e)}
 
 
+@app.get("/api/ws-config")
+async def get_ws_config(request: Request):
+    """Return WebSocket reconnection config derived from settings.yaml intervals."""
+    settings = request.app.state.settings
+    monitor = settings.get("monitor", {})
+    shogun = settings.get("shogun", {})
+    return {
+        "monitor": {
+            "base_interval_ms": monitor.get("base_interval_ms", 5000),
+            "max_interval_ms": monitor.get("max_interval_ms", 10000),
+        },
+        "shogun": {
+            "base_interval_ms": shogun.get("base_interval_ms", 1000),
+            "max_interval_ms": shogun.get("max_interval_ms", 3000),
+        },
+    }
+
+
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
     """WebSocket endpoint for real-time shogun pane output."""

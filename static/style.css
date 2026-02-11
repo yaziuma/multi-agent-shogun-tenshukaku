@@ -1012,3 +1012,144 @@ section h2::before {
         font-size: 18px;
     }
 }
+
+/* ===== 監視タブ コントロール行 ===== */
+.monitor-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin: 10px 0;
+    flex-wrap: wrap;
+}
+
+/* 再接続ボタン：クリアボタンと統一デザイン */
+.reconnect-monitor-btn {
+    padding: 8px 16px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent),
+        linear-gradient(180deg, #a8d8a0, #7cb87a);
+    border: 1px solid rgba(80, 140, 80, 0.45);
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 800;
+    color: var(--ink);
+    transition: all 0.2s;
+    box-shadow:
+        0 3px 0 rgba(60, 100, 60, 0.45),
+        0 6px 10px rgba(0, 0, 0, 0.18);
+}
+
+.reconnect-monitor-btn:hover {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.3), transparent),
+        linear-gradient(180deg, #b8e8b0, #8cc88a);
+    border-color: rgba(80, 140, 80, 0.6);
+}
+
+.reconnect-monitor-btn:active {
+    transform: translateY(2px);
+    box-shadow:
+        0 1px 0 rgba(60, 100, 60, 0.45),
+        0 3px 6px rgba(0, 0, 0, 0.18);
+}
+
+/* ===== WebSocket接続状態インジケーター ===== */
+.ws-status {
+    display: inline-block;
+    padding: 4px 10px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 800;
+    letter-spacing: 0.03em;
+    white-space: nowrap;
+}
+
+.ws-status-connecting {
+    background: rgba(255, 200, 50, 0.25);
+    border: 1px solid rgba(255, 200, 50, 0.5);
+    color: #7a6520;
+}
+
+.ws-status-connected {
+    display: none;
+}
+
+.ws-status-disconnected {
+    background: rgba(220, 60, 60, 0.2);
+    border: 1px solid rgba(220, 60, 60, 0.45);
+    color: #8a2020;
+}
+
+.ws-status-reconnecting {
+    background: rgba(255, 160, 50, 0.25);
+    border: 1px solid rgba(255, 160, 50, 0.5);
+    color: #7a5020;
+    animation: ws-pulse 1.5s ease-in-out infinite;
+}
+
+.ws-status-failed {
+    background: rgba(220, 60, 60, 0.3);
+    border: 1px solid rgba(220, 60, 60, 0.6);
+    color: #8a2020;
+}
+
+@keyframes ws-pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* 再接続ボタン: デフォルト非表示、切断時のみ表示 */
+.reconnect-btn-hidden {
+    display: none !important;
+}
+
+/* 指揮タブ用再接続ボタン */
+.reconnect-shogun-btn {
+    padding: 8px 16px;
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent),
+        linear-gradient(180deg, #a8d8a0, #7cb87a);
+    border: 2px solid rgba(60, 120, 60, 0.45);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 800;
+    color: #1a3a1a;
+    transition: all 0.15s;
+    box-shadow:
+        0 2px 0 rgba(60, 100, 60, 0.35),
+        0 6px 10px rgba(0, 0, 0, 0.18);
+}
+
+.reconnect-shogun-btn:hover {
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.3), transparent),
+        linear-gradient(180deg, #b8e8b0, #8cc88a);
+    border-color: rgba(80, 140, 80, 0.6);
+}
+
+.reconnect-shogun-btn:active {
+    transform: translateY(2px);
+    box-shadow:
+        0 1px 0 rgba(60, 100, 60, 0.45),
+        0 2px 4px rgba(0, 0, 0, 0.15);
+}
+
+/* モバイル対応 */
+@media (max-width: 640px) {
+    .monitor-controls {
+        gap: 8px;
+    }
+
+    .reconnect-monitor-btn {
+        padding: 10px 14px;
+        font-size: 14px;
+        min-height: 40px;
+    }
+
+    .ws-status {
+        font-size: 11px;
+        padding: 3px 8px;
+    }
+}
