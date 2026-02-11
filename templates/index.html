@@ -128,10 +128,11 @@
         <section class="dashboard">
             <h2>📊 ダッシュボード</h2>
             <div class="dashboard-controls">
+                <button type="button" id="dashboard-refresh-btn" class="dashboard-refresh-btn" hx-disable>更新</button>
                 <button type="button" id="dashboard-mode-toggle" class="dashboard-mode-btn" data-mode="rendered" hx-disable>📋 Rendered</button>
             </div>
-            <div id="dashboard-content" hx-get="/api/dashboard" hx-trigger="load, every 5s" hx-swap="innerHTML">
-                Loading...
+            <div id="dashboard-content">
+                読み込み待ち...
             </div>
         </section>
     </div>
@@ -870,11 +871,43 @@ document.getElementById('dashboard-mode-toggle').addEventListener('click', () =>
     applyDashboardMode();
 });
 
-// htmx: ダッシュボード更新後にモードを適用
-document.body.addEventListener('htmx:afterSettle', (e) => {
-    if (e.detail.target && e.detail.target.id === 'dashboard-content') {
-        applyDashboardMode();
-    }
+// ダッシュボード手動更新: fetchして表示を更新
+function refreshDashboard() {
+    const btn = document.getElementById('dashboard-refresh-btn');
+    btn.disabled = true;
+    btn.textContent = '更新中...';
+
+    fetch('/api/dashboard')
+        .then(res => {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.text();
+        })
+        .then(html => {
+            document.getElementById('dashboard-content').innerHTML = html;
+            applyDashboardMode();
+        })
+        .catch(err => {
+            document.getElementById('dashboard-content').innerHTML =
+                '<pre>Error: ' + escapeHtml(String(err)) + '</pre>';
+        })
+        .finally(() => {
+            btn.disabled = false;
+            btn.textContent = '更新';
+        });
+}
+
+// 更新ボタンクリック
+document.getElementById('dashboard-refresh-btn').addEventListener('click', refreshDashboard);
+
+// 初回表示: ダッシュボードタブが表示されたら一度だけfetch
+let dashboardInitialLoaded = false;
+document.querySelectorAll('.tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        if (btn.dataset.tab === 'dashboard' && !dashboardInitialLoaded) {
+            dashboardInitialLoaded = true;
+            refreshDashboard();
+        }
+    });
 });
 
 // クリアボタン: 全ペインの表示履歴を消去（バックエンドスナップショット方式）

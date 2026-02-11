@@ -22,12 +22,12 @@ def browser_context_args():
 
 
 def navigate_to_dashboard(page: Page):
-    """Navigate to the dashboard tab."""
+    """Navigate to the dashboard tab and trigger initial load."""
     page.goto(BASE_URL)
-    # Click the dashboard tab button
+    # Click the dashboard tab button (triggers initial fetch)
     page.click('button[data-tab="dashboard"]')
-    # Wait for htmx content to load (toggle button indicates content is ready)
-    page.wait_for_selector("#dashboard-mode-toggle", timeout=10000)
+    # Wait for dashboard content to load via manual fetch
+    page.wait_for_selector("#dashboard-raw-data", state="attached", timeout=10000)
 
 
 class TestToggleButtonVisibility:
@@ -115,26 +115,28 @@ class TestRenderedContent:
 
 
 class TestModePersistence:
-    """Mode persistence across htmx polling updates."""
+    """Mode persistence across manual refresh updates."""
 
-    def test_rendered_mode_persists_after_polling(self, page: Page):
-        """Rendered mode is maintained after htmx polling update."""
+    def test_rendered_mode_persists_after_refresh(self, page: Page):
+        """Rendered mode is maintained after manual refresh."""
         navigate_to_dashboard(page)
 
         # Verify we're in rendered mode
         toggle_btn = page.locator("#dashboard-mode-toggle")
         expect(toggle_btn).to_have_attribute("data-mode", "rendered")
 
-        # Wait for at least one polling cycle (5s + margin)
-        page.wait_for_timeout(6000)
+        # Click refresh button to reload dashboard content
+        refresh_btn = page.locator("#dashboard-refresh-btn")
+        refresh_btn.click()
+        page.wait_for_timeout(1000)
 
         # Mode should still be rendered
         expect(toggle_btn).to_have_attribute("data-mode", "rendered")
         display = page.locator("#dashboard-display")
         expect(display).to_have_class(re.compile("markdown-body"))
 
-    def test_raw_mode_persists_after_polling(self, page: Page):
-        """Raw mode is maintained after htmx polling update."""
+    def test_raw_mode_persists_after_refresh(self, page: Page):
+        """Raw mode is maintained after manual refresh."""
         navigate_to_dashboard(page)
 
         toggle_btn = page.locator("#dashboard-mode-toggle")
@@ -143,8 +145,10 @@ class TestModePersistence:
         toggle_btn.click()
         expect(toggle_btn).to_have_attribute("data-mode", "raw")
 
-        # Wait for at least one polling cycle (5s + margin)
-        page.wait_for_timeout(6000)
+        # Click refresh button to reload dashboard content
+        refresh_btn = page.locator("#dashboard-refresh-btn")
+        refresh_btn.click()
+        page.wait_for_timeout(1000)
 
         # Mode should still be raw
         expect(toggle_btn).to_have_attribute("data-mode", "raw")
