@@ -1246,50 +1246,126 @@ section h2::before {
     border-radius: var(--radius);
 }
 
+/* テーブル: 和紙風明るい背景でコントラスト確保 */
 #dashboard-content .markdown-body table {
-    border-color: rgba(90, 50, 20, 0.45);
+    background: rgba(255, 255, 255, 0.7);
+    border-collapse: collapse;
+    border: 2px solid rgba(90, 50, 20, 0.45);
+    margin: 12px 0;
 }
 
 #dashboard-content .markdown-body th,
 #dashboard-content .markdown-body td {
-    border-color: rgba(90, 50, 20, 0.35);
-    padding: 8px 12px;
-}
-
-#dashboard-content .markdown-body th {
-    background: rgba(90, 50, 20, 0.12);
-}
-
-#dashboard-content .markdown-body h1,
-#dashboard-content .markdown-body h2,
-#dashboard-content .markdown-body h3 {
-    border-bottom-color: rgba(90, 50, 20, 0.35);
+    border: 1px solid rgba(90, 50, 20, 0.35);
+    padding: 10px 14px;
     color: var(--ink);
 }
 
+/* th: ヘッダー行は濃いめの背景 */
+#dashboard-content .markdown-body th {
+    background: rgba(120, 70, 25, 0.22);
+    font-weight: 900;
+    letter-spacing: 0.02em;
+}
+
+/* td: セルは明るい背景 */
+#dashboard-content .markdown-body td {
+    background: rgba(255, 255, 255, 0.5);
+}
+
+/* ストライプパターンで読みやすく */
+#dashboard-content .markdown-body tbody tr:nth-child(2n) {
+    background: rgba(241, 228, 200, 0.4);
+}
+
+#dashboard-content .markdown-body tbody tr:nth-child(2n) td {
+    background: rgba(241, 228, 200, 0.35);
+}
+
+/* 見出し: 明確なコントラスト */
+#dashboard-content .markdown-body h1,
+#dashboard-content .markdown-body h2,
+#dashboard-content .markdown-body h3,
+#dashboard-content .markdown-body h4,
+#dashboard-content .markdown-body h5,
+#dashboard-content .markdown-body h6 {
+    border-bottom-color: rgba(90, 50, 20, 0.35);
+    color: var(--ink);
+    font-weight: 900;
+}
+
+#dashboard-content .markdown-body h1 { border-bottom-width: 3px; margin-top: 18px; }
+#dashboard-content .markdown-body h2 { border-bottom-width: 2px; margin-top: 16px; }
+
+/* コード: 明るい背景 */
 #dashboard-content .markdown-body code {
-    background: rgba(90, 50, 20, 0.08);
+    background: rgba(255, 255, 255, 0.55);
+    border: 1px solid rgba(90, 50, 20, 0.25);
     border-radius: 4px;
     padding: 2px 6px;
+    color: var(--ink);
+    font-family: var(--mono);
+    font-size: 0.9em;
 }
 
+/* コードブロック: 明るい背景 */
 #dashboard-content .markdown-body pre {
-    background: rgba(0, 0, 0, 0.06);
+    background: rgba(255, 255, 255, 0.45);
+    border: 2px solid rgba(90, 50, 20, 0.3);
     border-radius: 8px;
-    padding: 12px;
+    padding: 14px;
+    overflow-x: auto;
 }
 
+#dashboard-content .markdown-body pre code {
+    background: transparent;
+    border: none;
+    padding: 0;
+}
+
+/* リスト: 読みやすく */
+#dashboard-content .markdown-body ul,
+#dashboard-content .markdown-body ol {
+    color: var(--ink);
+}
+
+/* リンク: 朱色 */
 #dashboard-content .markdown-body a {
     color: var(--lacquer);
+    font-weight: 700;
+    text-decoration: underline;
 }
 
+#dashboard-content .markdown-body a:hover {
+    color: var(--lacquer2);
+}
+
+/* 水平線: はっきりと */
 #dashboard-content .markdown-body hr {
-    border-color: rgba(90, 50, 20, 0.25);
+    border: none;
+    border-top: 3px solid rgba(90, 50, 20, 0.35);
+    margin: 16px 0;
 }
 
+/* 引用: 左ボーダーを強調 */
 #dashboard-content .markdown-body blockquote {
-    border-left-color: var(--lacquer);
-    color: rgba(42, 27, 18, 0.75);
+    border-left: 6px solid var(--lacquer);
+    background: rgba(255, 255, 255, 0.4);
+    padding: 10px 14px;
+    margin: 12px 0;
+    color: rgba(42, 27, 18, 0.85);
+    border-radius: 6px;
+}
+
+/* 強調: 読みやすく */
+#dashboard-content .markdown-body strong {
+    font-weight: 900;
+    color: var(--ink);
+}
+
+#dashboard-content .markdown-body em {
+    font-style: italic;
+    color: var(--ink);
 }
 
 /* Raw mode pre styling within dashboard */
