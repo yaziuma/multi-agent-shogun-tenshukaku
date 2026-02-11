@@ -1153,3 +1153,122 @@ section h2::before {
         padding: 3px 8px;
     }
 }
+
+/* ===== ダッシュボード: Markdown整形表示 ===== */
+.dashboard-controls {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    margin: 10px 0;
+}
+
+.dashboard-mode-btn {
+    padding: 8px 16px;
+    border-radius: 10px;
+    border: 2px solid rgba(90, 50, 20, 0.55);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent),
+        linear-gradient(180deg, #f0dcae, #e0c487);
+    color: var(--ink);
+    font-weight: 800;
+    font-size: 14px;
+    cursor: pointer;
+    box-shadow:
+        0 4px 0 rgba(90, 60, 25, 0.55),
+        0 8px 14px rgba(0, 0, 0, 0.25);
+    transition: transform 0.05s, box-shadow 0.05s;
+}
+
+.dashboard-mode-btn:hover {
+    filter: brightness(1.05);
+    transform: translateY(-1px);
+}
+
+.dashboard-mode-btn:active {
+    transform: translateY(3px);
+    box-shadow:
+        0 1px 0 rgba(90, 60, 25, 0.55),
+        0 4px 8px rgba(0, 0, 0, 0.25);
+}
+
+/* Markdown rendered content: github-markdown-css overrides for sengoku theme */
+#dashboard-content .markdown-body {
+    background: transparent;
+    color: var(--ink);
+    font-family: inherit;
+    padding: 12px;
+    border-radius: var(--radius);
+}
+
+#dashboard-content .markdown-body table {
+    border-color: rgba(90, 50, 20, 0.45);
+}
+
+#dashboard-content .markdown-body th,
+#dashboard-content .markdown-body td {
+    border-color: rgba(90, 50, 20, 0.35);
+    padding: 8px 12px;
+}
+
+#dashboard-content .markdown-body th {
+    background: rgba(90, 50, 20, 0.12);
+}
+
+#dashboard-content .markdown-body h1,
+#dashboard-content .markdown-body h2,
+#dashboard-content .markdown-body h3 {
+    border-bottom-color: rgba(90, 50, 20, 0.35);
+    color: var(--ink);
+}
+
+#dashboard-content .markdown-body code {
+    background: rgba(90, 50, 20, 0.08);
+    border-radius: 4px;
+    padding: 2px 6px;
+}
+
+#dashboard-content .markdown-body pre {
+    background: rgba(0, 0, 0, 0.06);
+    border-radius: 8px;
+    padding: 12px;
+}
+
+#dashboard-content .markdown-body a {
+    color: var(--lacquer);
+}
+
+#dashboard-content .markdown-body hr {
+    border-color: rgba(90, 50, 20, 0.25);
+}
+
+#dashboard-content .markdown-body blockquote {
+    border-left-color: var(--lacquer);
+    color: rgba(42, 27, 18, 0.75);
+}
+
+/* Raw mode pre styling within dashboard */
+#dashboard-content pre {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    line-height: 1.45;
+    white-space: pre-wrap;
+    word-break: break-word;
+}
+
+/* Checkbox list items (GFM task lists) */
+#dashboard-content .markdown-body .task-list-item {
+    list-style-type: none;
+}
+
+#dashboard-content .markdown-body .task-list-item input[type="checkbox"] {
+    margin-right: 6px;
+}
+
+@media (max-width: 640px) {
+    .dashboard-mode-btn {
+        padding: 10px 14px;
+        font-size: 14px;
+        min-height: 40px;
+    }
+}
