@@ -1162,6 +1162,52 @@ section h2::before {
     margin: 10px 0;
 }
 
+/* 更新ボタン: 朱色の戦国スタイル */
+.dashboard-refresh-btn {
+    padding: 8px 20px;
+    border-radius: 10px;
+    border: 2px solid rgba(40, 10, 10, 0.55);
+    background:
+        linear-gradient(180deg, rgba(255, 255, 255, 0.22), transparent),
+        linear-gradient(180deg, var(--lacquer2), var(--lacquer));
+    color: #fff6e7;
+    font-weight: 900;
+    font-size: 14px;
+    letter-spacing: 0.08em;
+    cursor: pointer;
+    text-shadow: 0 1px 0 rgba(0, 0, 0, 0.55);
+    box-shadow:
+        0 4px 0 rgba(70, 20, 20, 0.55),
+        0 8px 14px rgba(0, 0, 0, 0.25);
+    transition: transform 0.05s, box-shadow 0.05s;
+}
+
+.dashboard-refresh-btn:hover {
+    filter: brightness(1.1);
+    transform: translateY(-1px);
+}
+
+.dashboard-refresh-btn:active {
+    transform: translateY(3px);
+    box-shadow:
+        0 1px 0 rgba(70, 20, 20, 0.55),
+        0 4px 8px rgba(0, 0, 0, 0.25);
+}
+
+.dashboard-refresh-btn:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    transform: none;
+}
+
+@media (max-width: 640px) {
+    .dashboard-refresh-btn {
+        padding: 10px 14px;
+        font-size: 14px;
+        min-height: 40px;
+    }
+}
+
 .dashboard-mode-btn {
     padding: 8px 16px;
     border-radius: 10px;
