@@ -14,7 +14,7 @@
     <div class="tab-content active" id="tab-command">
         <section class="command-input">
             <h2>💬 将軍との会話</h2>
-            <form hx-post="/api/command" hx-target="#command-result" hx-swap="innerHTML"
+            <form hx-post="{{ base_path }}/api/command" hx-target="#command-result" hx-swap="innerHTML"
                   hx-on::after-request="if(event.detail.successful) this.reset()">
                 <textarea name="instruction" rows="5" placeholder="将軍に話しかける..."></textarea>
                 <div class="btn-row">
@@ -248,7 +248,7 @@ function sendEscapeKey() {
     if (!confirm('Escキーを将軍に送信しますか？')) {
         return;
     }
-    fetch('/api/special-key', {
+    fetch('{{ base_path }}/api/special-key', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({key: 'Escape'})
@@ -279,7 +279,7 @@ document.addEventListener('keydown', (e) => {
 
 // TUI操作パネル: 汎用キー送信関数
 function sendTuiKey(key) {
-    fetch('/api/special-key', {
+    fetch('{{ base_path }}/api/special-key', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'},
         body: JSON.stringify({key: key})
@@ -661,7 +661,7 @@ let monitorWs = null;
     // 設定値取得（全閾値はsettings.yamlから算出、ハードコード禁止）
     let wsConfig;
     try {
-        const res = await fetch('/api/ws-config');
+        const res = await fetch('{{ base_path }}/api/ws-config');
         wsConfig = await res.json();
     } catch (e) {
         // フォールバック: API失敗時はデフォルト値（settings.yamlのデフォルトと同じ）
@@ -678,8 +678,14 @@ let monitorWs = null;
     // 監視タブ(monitor): uiDelay = base_interval_ms（瞬断無視の閾値）
     const monitorUiDelayMs = wsConfig.monitor.base_interval_ms;
 
+    // WebSocket URL構築: プロトコル自動検出 + base_path対応
+    const wsProtocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+    const basePath = '{{ base_path }}';
+    const shogunWsUrl = wsProtocol + '//' + location.host + basePath + '/ws';
+    const monitorWsUrl = wsProtocol + '//' + location.host + basePath + '/ws/monitor';
+
     // 指揮タブ WebSocket
-    shogunWs = new ReconnectingWebSocket(`ws://${location.host}/ws`, {
+    shogunWs = new ReconnectingWebSocket(shogunWsUrl, {
         uiDelayMs: shogunUiDelayMs,
         maxRetries: 3,
         statusElementId: 'shogun-ws-status',
@@ -737,7 +743,7 @@ let monitorWs = null;
     });
 
     // 監視タブ WebSocket
-    monitorWs = new ReconnectingWebSocket(`ws://${location.host}/ws/monitor`, {
+    monitorWs = new ReconnectingWebSocket(monitorWsUrl, {
         uiDelayMs: monitorUiDelayMs,
         maxRetries: 3,
         statusElementId: 'monitor-ws-status',
@@ -877,7 +883,7 @@ function refreshDashboard() {
     btn.disabled = true;
     btn.textContent = '更新中...';
 
-    fetch('/api/dashboard')
+    fetch('{{ base_path }}/api/dashboard')
         .then(res => {
             if (!res.ok) throw new Error('HTTP ' + res.status);
             return res.text();
@@ -912,7 +918,7 @@ document.querySelectorAll('.tab-btn').forEach(btn => {
 
 // クリアボタン: 全ペインの表示履歴を消去（バックエンドスナップショット方式）
 document.getElementById('clear-monitor-btn').addEventListener('click', () => {
-    fetch('/api/monitor/clear', {
+    fetch('{{ base_path }}/api/monitor/clear', {
         method: 'POST',
         headers: {'Content-Type': 'application/json'}
     })
