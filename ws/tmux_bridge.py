@@ -113,6 +113,16 @@ class TmuxBridge:
             session_name=self.multiagent_session, default=None
         )
 
+    def _refresh_session(self) -> None:
+        """Refresh the cached session reference by re-fetching from tmux server.
+
+        Called when the cached session_id becomes stale (e.g., after tmux
+        session recreation). This avoids the 'can't find session: $N' error.
+        """
+        self.session = self.server.sessions.get(
+            session_name=self.multiagent_session, default=None
+        )
+
     def capture_shogun_pane(self, lines: int = 2000) -> str:
         """
         Capture output from the shogun pane (shogun:0.0) with scrollback.
@@ -152,10 +162,22 @@ class TmuxBridge:
             Example: [{"agent_id": "karo", "pane_index": 0, "output": "..."}]
         """
         if not self.session:
-            return []
+            self._refresh_session()
+            if not self.session:
+                return []
+
+        # Get pane list with retry on stale session reference
+        try:
+            panes = list(self.session.panes)
+        except Exception:
+            # Session reference may be stale, try refresh once
+            self._refresh_session()
+            if not self.session:
+                return []
+            panes = list(self.session.panes)
 
         result = []
-        for pane in self.session.panes:
+        for pane in panes:
             # Get pane index
             pane_index = int(pane.pane_index)
 
@@ -194,11 +216,20 @@ class TmuxBridge:
             True if successful, False otherwise
         """
         if not self.session:
-            return False
+            self._refresh_session()
+            if not self.session:
+                return False
         try:
             pane = self.session.panes.get(pane_index="0")
         except Exception:
-            pane = None
+            # Session reference may be stale, try refresh once
+            self._refresh_session()
+            if not self.session:
+                return False
+            try:
+                pane = self.session.panes.get(pane_index="0")
+            except Exception:
+                pane = None
         if pane:
             import time
 
