@@ -83,8 +83,12 @@ async def index(request: Request):
     except Exception:
         commands = []
 
+    # X-Forwarded-Prefix ヘッダからbase_pathを取得（nginx対応）
+    base_path = request.headers.get("X-Forwarded-Prefix", "")
+
     return templates.TemplateResponse(
-        "index.html", {"request": request, "commands": commands}
+        "index.html",
+        {"request": request, "commands": commands, "base_path": base_path},
     )
 
 
@@ -164,8 +168,13 @@ async def get_history(request: Request):
         bridge = request.app.state.tmux_bridge
         commands = bridge.read_command_history()
         commands.reverse()  # 最新順
+
+        # X-Forwarded-Prefix ヘッダからbase_pathを取得
+        base_path = request.headers.get("X-Forwarded-Prefix", "")
+
         return templates.TemplateResponse(
-            "partials/history.html", {"request": request, "commands": commands}
+            "partials/history.html",
+            {"request": request, "commands": commands, "base_path": base_path},
         )
     except Exception as e:
         return HTMLResponse(f"<pre>Error: {e}</pre>")
