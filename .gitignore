@@ -1,11 +1,91 @@
+# shogun-web-v2 whitelist .gitignore
+# Deny all by default
+*
+
+# Allow directory traversal
+!*/
+
+# Allow root config files
+!.gitignore
+!.gitattributes
+!.python-version
+!README.md
+!README_ja.md
+!main.py
+!pyproject.toml
+!start.sh
+!restart.sh
+
+# Allow .claude directory and contents
+!.claude/
+!.claude/**
+
+# Allow assets directory (screenshots only)
+!assets/
+!assets/screenshots/
+!assets/screenshots/**
+
+# Allow config directory (wildcard + deny dangerous patterns)
+!config/
+!config/**
+
+# Allow static directory
+!static/
+!static/**
+
+# Allow templates directory
+!templates/
+!templates/**
+
+# Allow tests directory
+!tests/
+!tests/**
+
+# Allow ws (WebSocket) directory
+!ws/
+!ws/**
+
+# Explicitly deny (belt and suspenders)
+# Config directory dangerous files
+config/.env*
+config/secrets*
+config/credentials*
+config/*.key
+config/*.pem
+.venv/
 __pycache__/
 *.pyc
-.venv/
-uv.lock
-.env
+.env*
 *.egg-info/
 dist/
 build/
 .mypy_cache/
 .ruff_cache/
 logs/
+uv.lock
+gunicorn.pid
+gunicorn.ctl
+e2e-tests/
+playwright.config.ts
+node_modules/
+# Additional security patterns
+*.log
+*.db
+*.sqlite
+secrets*
+credentials*
+*.key
+*.pem
+.claude/settings.local.json
+# SSH keys
+id_rsa
+id_ed25519
+id_ecdsa
+*.ppk
+# Certificates
+*.crt
+*.cer
+*.pfx
+*.p12
+*.jks
+*.keystore
