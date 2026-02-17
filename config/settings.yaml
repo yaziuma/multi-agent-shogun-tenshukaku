@@ -25,3 +25,6 @@ shogun:
 
 ui:
   user_input_color: "#4FC3F7"
+
+gunicorn:
+  workers: 2
