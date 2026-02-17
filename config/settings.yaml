@@ -1,6 +1,6 @@
 server:
   host: "0.0.0.0"
-  port: 30001
+  port: 30000
 
 bakuhu:
   base_path: "/home/quieter/projects/multi-agent-bakuhu"
@@ -25,3 +25,6 @@ shogun:
 
 ui:
   user_input_color: "#4FC3F7"
+
+gunicorn:
+  workers: 2
