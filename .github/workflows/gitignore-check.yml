@@ -1,0 +1,45 @@
+name: .gitignore Integrity Check
+
+on:
+  push:
+    branches: [master, main]
+  pull_request:
+    branches: [master, main]
+
+jobs:
+  gitignore-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Verify .gitignore whitelist format
+        run: |
+          FIRST_LINE=$(grep -v '^#' .gitignore | grep -v '^\s*$' | head -n 1)
+          if [[ "$FIRST_LINE" != "*" ]]; then
+            echo "❌ .gitignore must start with '*' (whitelist format)"
+            exit 1
+          fi
+          echo "✅ .gitignore whitelist format verified"
+
+      - name: Verify security deny patterns
+        run: |
+          required_patterns=(".env*" "secrets*" "credentials*" "*.key" "id_rsa*")
+          for pattern in "${required_patterns[@]}"; do
+            if ! grep -qF "$pattern" .gitignore; then
+              echo "❌ Missing security pattern: $pattern"
+              exit 1
+            fi
+          done
+          echo "✅ All security deny patterns present"
+
+      - name: Verify .gitattributes CRLF prevention
+        run: |
+          if [ ! -f .gitattributes ]; then
+            echo "❌ .gitattributes file not found"
+            exit 1
+          fi
+          if ! grep -qF '* text=auto eol=lf' .gitattributes; then
+            echo "❌ .gitattributes must contain '* text=auto eol=lf'"
+            exit 1
+          fi
+          echo "✅ .gitattributes CRLF prevention verified"
