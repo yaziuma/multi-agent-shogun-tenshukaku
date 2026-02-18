@@ -16,6 +16,10 @@
 !start.sh
 !restart.sh
 
+# Allow .github directory (CI/CD)
+!.github/
+!.github/**
+
 # Allow .claude directory and contents
 !.claude/
 !.claude/**
@@ -78,7 +82,7 @@ credentials*
 *.pem
 .claude/settings.local.json
 # SSH keys
-id_rsa
+id_rsa*
 id_ed25519
 id_ecdsa
 *.ppk

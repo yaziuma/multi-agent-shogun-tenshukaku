@@ -1,0 +1,4 @@
+# .gitignore と .gitattributes の変更は必ずオーナーレビュー
+/.gitignore @yaziuma
+/.gitattributes @yaziuma
+/.claude/ @yaziuma
