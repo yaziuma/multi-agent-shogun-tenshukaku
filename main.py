@@ -1,3 +1,5 @@
+import os
+import tempfile
 from contextlib import asynccontextmanager
 from pathlib import Path
 
@@ -86,9 +88,30 @@ async def index(request: Request):
     # X-Forwarded-Prefix ヘッダからbase_pathを取得（nginx対応）
     base_path = request.headers.get("X-Forwarded-Prefix", "")
 
+    settings = request.app.state.settings
     return templates.TemplateResponse(
         "index.html",
-        {"request": request, "commands": commands, "base_path": base_path},
+        {
+            "request": request,
+            "commands": commands,
+            "base_path": base_path,
+            "settings": settings,
+        },
+    )
+
+
+@app.get("/settings", response_class=HTMLResponse)
+async def settings_page(request: Request):
+    """Render settings page."""
+    base_path = request.headers.get("X-Forwarded-Prefix", "")
+    settings = request.app.state.settings
+    return templates.TemplateResponse(
+        "settings.html",
+        {
+            "request": request,
+            "settings": settings,
+            "base_path": base_path,
+        },
     )
 
 
@@ -110,6 +133,32 @@ async def get_dashboard(request: Request):
 
 class SpecialKeyRequest(BaseModel):
     key: str
+
+
+class TemplatePhrase(BaseModel):
+    label: str
+    text: str
+
+
+class MonitorSettingsUpdate(BaseModel):
+    base_interval_ms: int
+    max_interval_ms: int
+
+
+class ShogunSettingsUpdate(BaseModel):
+    base_interval_ms: int
+    max_interval_ms: int
+
+
+class UISettingsUpdate(BaseModel):
+    textarea_max_rows: int
+    template_phrases: list[TemplatePhrase]
+
+
+class SettingsPayload(BaseModel):
+    monitor: MonitorSettingsUpdate
+    shogun: ShogunSettingsUpdate
+    ui: UISettingsUpdate
 
 
 @app.post("/api/command")
@@ -216,6 +265,94 @@ async def get_ws_config(request: Request):
             "max_interval_ms": shogun.get("max_interval_ms", 3000),
         },
     }
+
+
+SETTINGS_PATH = Path(__file__).parent / "config" / "settings.yaml"
+
+
+@app.get("/api/settings")
+async def get_settings(request: Request):
+    """Return user-configurable settings."""
+    s = request.app.state.settings
+    monitor = s.get("monitor", {})
+    shogun = s.get("shogun", {})
+    ui = s.get("ui", {})
+    return {
+        "monitor": {
+            "base_interval_ms": monitor.get("base_interval_ms", 5000),
+            "max_interval_ms": monitor.get("max_interval_ms", 10000),
+        },
+        "shogun": {
+            "base_interval_ms": shogun.get("base_interval_ms", 1000),
+            "max_interval_ms": shogun.get("max_interval_ms", 3000),
+        },
+        "ui": {
+            "textarea_max_rows": ui.get("textarea_max_rows", 8),
+            "template_phrases": ui.get("template_phrases") or [],
+        },
+    }
+
+
+@app.put("/api/settings")
+async def update_settings(request: Request, body: SettingsPayload):
+    """Update user-configurable settings and write to settings.yaml atomically."""
+    # Validation
+    for name, val in [
+        ("monitor.base_interval_ms", body.monitor.base_interval_ms),
+        ("monitor.max_interval_ms", body.monitor.max_interval_ms),
+        ("shogun.base_interval_ms", body.shogun.base_interval_ms),
+        ("shogun.max_interval_ms", body.shogun.max_interval_ms),
+    ]:
+        if not (100 <= val <= 60000):
+            raise HTTPException(
+                status_code=422, detail=f"{name} must be between 100 and 60000"
+            )
+    if body.monitor.max_interval_ms < body.monitor.base_interval_ms:
+        raise HTTPException(
+            status_code=422,
+            detail="monitor.max_interval_ms must be >= base_interval_ms",
+        )
+    if body.shogun.max_interval_ms < body.shogun.base_interval_ms:
+        raise HTTPException(
+            status_code=422, detail="shogun.max_interval_ms must be >= base_interval_ms"
+        )
+    if not (1 <= body.ui.textarea_max_rows <= 50):
+        raise HTTPException(
+            status_code=422, detail="ui.textarea_max_rows must be between 1 and 50"
+        )
+
+    # Load current full settings (to preserve non-editable fields)
+    with open(SETTINGS_PATH) as f:
+        full = yaml.safe_load(f)
+
+    # Apply updates
+    full.setdefault("monitor", {})
+    full["monitor"]["base_interval_ms"] = body.monitor.base_interval_ms
+    full["monitor"]["max_interval_ms"] = body.monitor.max_interval_ms
+    full.setdefault("shogun", {})
+    full["shogun"]["base_interval_ms"] = body.shogun.base_interval_ms
+    full["shogun"]["max_interval_ms"] = body.shogun.max_interval_ms
+    full.setdefault("ui", {})
+    full["ui"]["textarea_max_rows"] = body.ui.textarea_max_rows
+    full["ui"]["template_phrases"] = [p.model_dump() for p in body.ui.template_phrases]
+
+    # Atomic write: write to tmp then rename
+    dir_ = SETTINGS_PATH.parent
+    fd, tmp_path = tempfile.mkstemp(dir=dir_, suffix=".yaml.tmp")
+    try:
+        with os.fdopen(fd, "w") as f:
+            yaml.dump(full, f, allow_unicode=True, default_flow_style=False)
+        os.replace(tmp_path, SETTINGS_PATH)
+    except Exception:
+        try:
+            os.unlink(tmp_path)
+        except OSError:
+            pass
+        raise
+
+    # Update in-memory state
+    request.app.state.settings = full
+    return {"status": "saved"}
 
 
 @app.websocket("/ws")

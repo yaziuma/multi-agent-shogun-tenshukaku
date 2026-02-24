@@ -16,6 +16,8 @@ Tenshukaku provides a browser-based interface for commanding and monitoring a fl
 
 Send messages directly to the Shogun agent's tmux pane. Supports Ctrl+Enter for quick submission and an Escape key button to interrupt Claude Code when needed. Includes Top/Bottom scroll buttons for navigating long output.
 
+The **input textarea auto-resizes** from a single row up to a configurable maximum (default: 8 rows, adjustable in Settings). A **Template Phrases** dropdown appears above the textarea when phrases are configured — selecting a phrase inserts it at the cursor position, enabling repeated use without losing existing text.
+
 A collapsible **TUI Operation Panel** provides direct keyboard input: arrow keys, Enter, Tab, Space, Backspace, number keys (0-9), and Yes/No confirmation buttons — useful for navigating interactive CLI interfaces without leaving the browser. Critical keys (Enter, Escape, Yes, No) require a 1-second long-press to prevent accidental activation.
 
 The **Chat Log** section displays a conversation-style view of interactions: user messages appear in blue and shogun responses in gold. The raw tmux pane output is available in a collapsible section below the chat log.
@@ -44,18 +46,32 @@ Browse the command queue (`shogun_to_karo.yaml`) with expandable details for eac
 
 ![History Tab](assets/screenshots/tab-history.png)
 
+### Settings Page (設定) — `GET /settings`
+
+Accessible via the ⚙️ icon in the navigation bar. Allows runtime configuration without editing `settings.yaml` directly:
+
+- **Monitor polling interval** — base and max interval (ms) for the agent monitor grid
+- **Shogun polling interval** — base and max interval (ms) for the shogun pane WebSocket feed
+- **Input textarea max rows** — maximum row height before the textarea becomes scrollable (1–50)
+- **Template phrases** — add/edit/delete preset phrases shown in the Command Tab dropdown
+
+Settings are written atomically to `config/settings.yaml` via `PUT /api/settings` and take effect immediately in the running app.
+
 ## Architecture
 
 ```
 Browser (HTTP + WebSocket)
     │
     ├── GET  /              → Main SPA (Jinja2 templates + htmx)
+    ├── GET  /settings      → Settings page
     ├── POST /api/command   → tmux send-keys to shogun pane
     ├── POST /api/special-key → Send special keys (allowlist-based)
     ├── POST /api/monitor/clear → Clear monitor display (non-destructive)
     ├── GET  /api/dashboard → Read dashboard.md (raw markdown in data container)
     ├── GET  /api/history   → Read shogun_to_karo.yaml
     ├── GET  /api/ws-config → WebSocket reconnection configuration
+    ├── GET  /api/settings  → Read user-configurable settings (JSON)
+    ├── PUT  /api/settings  → Update and persist settings atomically
     ├── WS   /ws            → Real-time shogun pane output (delta)
     └── WS   /ws/monitor    → Real-time all-pane monitoring (delta)
     │
@@ -140,7 +156,15 @@ shogun:
 
 ui:
   user_input_color: "#4FC3F7"
+  textarea_max_rows: 8
+  template_phrases:
+    - label: "状況確認"
+      text: "状況確認"
+    - label: "家老呼ぶ"
+      text: "家老に確認しろ！"
 ```
+
+The `ui.textarea_max_rows` and `ui.template_phrases` fields can also be edited at runtime via the Settings page (`/settings`).
 
 ### Running
 
@@ -173,6 +197,7 @@ multi-agent-shogun-tenshukaku/
 ├── templates/
 │   ├── base.html            # Base template (header, footer, CDN assets)
 │   ├── index.html           # Main SPA (4 tabs + JS)
+│   ├── settings.html        # Settings page (polling intervals, template phrases)
 │   └── partials/
 │       ├── history.html     # Command history partial
 │       ├── output.html      # Pane output partial

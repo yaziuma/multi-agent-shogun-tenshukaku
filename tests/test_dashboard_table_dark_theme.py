@@ -63,15 +63,20 @@ class TestMarkdownTableVisibility:
         # Pitch black would be rgb(0, 0, 0) or rgba(0, 0, 0, ...)
         # Our theme uses light backgrounds: rgba(255, 255, 255, 0.7)
         # Assert that it's NOT pure black
-        assert bg_color != "rgb(0, 0, 0)", f"Table background is pitch black: {bg_color}"
-        assert bg_color != "rgba(0, 0, 0, 1)", f"Table background is pitch black: {bg_color}"
+        assert bg_color != "rgb(0, 0, 0)", (
+            f"Table background is pitch black: {bg_color}"
+        )
+        assert bg_color != "rgba(0, 0, 0, 1)", (
+            f"Table background is pitch black: {bg_color}"
+        )
 
         # Additionally, verify it contains light color values
         # Expected: rgba(255, 255, 255, 0.7) or similar light color
         # Simple heuristic: if RGB components exist, at least one should be > 200
         if bg_color.startswith("rgb"):
             import re
-            nums = re.findall(r'\d+', bg_color)
+
+            nums = re.findall(r"\d+", bg_color)
             rgb = [int(n) for n in nums[:3]]  # First 3 are R, G, B
             max_component = max(rgb)
             assert max_component > 200, (
@@ -94,7 +99,8 @@ class TestMarkdownTableVisibility:
         # Simple check: RGB components should be relatively low (< 100)
         if text_color.startswith("rgb"):
             import re
-            nums = re.findall(r'\d+', text_color)
+
+            nums = re.findall(r"\d+", text_color)
             rgb = [int(n) for n in nums[:3]]
             max_component = max(rgb)
             # Dark text means low RGB values
@@ -115,4 +121,7 @@ class TestMarkdownTableVisibility:
 
         # Verify screenshot file exists
         import os
-        assert os.path.exists(screenshot_path), f"Screenshot not saved: {screenshot_path}"
+
+        assert os.path.exists(screenshot_path), (
+            f"Screenshot not saved: {screenshot_path}"
+        )

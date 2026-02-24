@@ -8,15 +8,23 @@
         <button type="button" class="tab-btn" data-tab="monitor" hx-disable>監視</button>
         <button type="button" class="tab-btn" data-tab="dashboard" hx-disable>戦況</button>
         <button type="button" class="tab-btn" data-tab="history" hx-disable>履歴</button>
+        <a href="{{ base_path }}/settings" class="tab-settings-link" hx-disable>⚙️</a>
     </nav>
 
     <!-- タブ1: 指揮 -->
     <div class="tab-content active" id="tab-command">
         <section class="command-input">
             <h2>💬 将軍との会話</h2>
+            <!-- 規定文言セレクトボックス（文言が設定されている場合のみ表示） -->
+            <div id="template-phrase-container" style="display:none; margin-bottom: 6px;">
+                <select id="template-phrase-select" class="template-phrase-select">
+                    <option value="" disabled selected>-- 規定文言を選択 --</option>
+                </select>
+            </div>
             <form hx-post="{{ base_path }}/api/command" hx-target="#command-result" hx-swap="innerHTML"
                   hx-on::after-request="if(event.detail.successful) this.reset()">
-                <textarea name="instruction" rows="5" placeholder="将軍に話しかける..."></textarea>
+                <textarea name="instruction" rows="1" placeholder="将軍に話しかける..." style="overflow-y: hidden;"></textarea>
+                <div id="submit-error" style="display:none; color: #c0392b; font-size: 14px; margin-top: 4px;"></div>
                 <div class="btn-row">
                     <button type="submit">送信</button>
                     <button type="button" id="esc-btn" class="esc-btn">Esc</button>
@@ -144,6 +152,8 @@
             {% include "partials/history.html" %}
         </section>
     </div>
+
+
 </div>
 
 <!-- スクロールボタン（全タブ共通・固定表示） -->
@@ -182,6 +192,36 @@
     font-style: italic;
 }
 
+/* 規定文言セレクトボックス */
+.template-phrase-select {
+    width: 100%;
+    padding: 6px 10px;
+    border-radius: 6px;
+    border: 1px solid rgba(120,70,25,0.35);
+    background: rgba(255,255,255,0.25);
+    font-size: 14px;
+    cursor: pointer;
+}
+.template-phrase-select:focus {
+    outline: none;
+    border-color: rgba(120,70,25,0.7);
+}
+
+/* 設定ページリンク */
+.tab-settings-link {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: none;
+    background: transparent;
+    font-size: 14px;
+    text-decoration: none;
+    color: inherit;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+.tab-settings-link:hover {
+    background: rgba(120,70,25,0.15);
+}
 /* クリアボタン */
 .clear-monitor-btn {
     margin: 0;
@@ -201,6 +241,35 @@
 </style>
 
 <script>
+// ===== 入力欄自動リサイズ =====
+(function() {
+    const textarea = document.querySelector('textarea[name="instruction"]');
+    if (!textarea) return;
+    window._textareaMaxRows = {{ settings.ui.textarea_max_rows | default(8) }};
+    const lineHeight = parseInt(getComputedStyle(textarea).lineHeight) || 20;
+
+    function adjustHeight() {
+        textarea.style.height = 'auto';
+        const maxHeight = lineHeight * window._textareaMaxRows;
+        textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px';
+        textarea.style.overflowY = textarea.scrollHeight > maxHeight ? 'auto' : 'hidden';
+    }
+
+    window._textareaAdjust = adjustHeight;
+    textarea.addEventListener('input', adjustHeight);
+
+    // フォームリセット時に高さをリセット
+    const form = textarea.closest('form');
+    if (form) {
+        form.addEventListener('reset', function() {
+            setTimeout(function() {
+                textarea.style.height = 'auto';
+                textarea.style.overflowY = 'hidden';
+            }, 0);
+        });
+    }
+})();
+
 // ユーザー入力マーカー定数
 const USER_INPUT_MARKER = '\x1f';
 
@@ -258,11 +327,15 @@ function sendEscapeKey() {
         if (data.status === 'sent') {
             document.getElementById('command-result').innerHTML = '<p style="color:green;">Escキーを送信しました</p>';
         } else {
-            document.getElementById('command-result').innerHTML = '<p style="color:red;">送信失敗: ' + (data.message || 'Unknown error') + '</p>';
+            const _el = document.getElementById('command-result');
+            _el.textContent = '送信失敗: ' + (data.message || 'Unknown error');
+            _el.style.color = 'red';
         }
     })
     .catch(err => {
-        document.getElementById('command-result').innerHTML = '<p style="color:red;">送信エラー: ' + err + '</p>';
+        const _el = document.getElementById('command-result');
+        _el.textContent = '送信エラー: ' + err;
+        _el.style.color = 'red';
     });
 }
 
@@ -287,13 +360,19 @@ function sendTuiKey(key) {
     .then(res => res.json())
     .then(data => {
         if (data.status === 'sent') {
-            document.getElementById('command-result').innerHTML = '<p style="color:green;">キー「' + key + '」を送信しました</p>';
+            const _el = document.getElementById('command-result');
+            _el.textContent = 'キー「' + key + '」を送信しました';
+            _el.style.color = 'green';
         } else {
-            document.getElementById('command-result').innerHTML = '<p style="color:red;">送信失敗: ' + (data.message || 'Unknown error') + '</p>';
+            const _el = document.getElementById('command-result');
+            _el.textContent = '送信失敗: ' + (data.message || 'Unknown error');
+            _el.style.color = 'red';
         }
     })
     .catch(err => {
-        document.getElementById('command-result').innerHTML = '<p style="color:red;">送信エラー: ' + err + '</p>';
+        const _el = document.getElementById('command-result');
+        _el.textContent = '送信エラー: ' + err;
+        _el.style.color = 'red';
     });
 }
 
@@ -447,13 +526,33 @@ function appendToRawOutput(text) {
     }
 }
 
-// htmx afterRequest イベントで送信成功時に会話ログに追加
+// htmx afterRequest イベントで送信成功/失敗を処理
 document.body.addEventListener('htmx:afterRequest', (e) => {
-    if (e.detail.pathInfo.requestPath === '/api/command' && e.detail.successful) {
+    if (e.detail.pathInfo.requestPath === '/api/command') {
         const form = e.target;
         const textarea = form.querySelector('textarea[name="instruction"]');
-        if (textarea && textarea.value.trim()) {
-            addChatMessage(textarea.value.trim(), 'user');
+        const errorDiv = document.getElementById('submit-error');
+        const isSuccess = e.detail.successful && e.detail.xhr && e.detail.xhr.status === 200;
+
+        if (isSuccess) {
+            if (textarea && textarea.value.trim()) {
+                addChatMessage(textarea.value.trim(), 'user');
+            }
+            if (errorDiv) {
+                errorDiv.style.display = 'none';
+                errorDiv.textContent = '';
+            }
+        } else {
+            // 送信失敗: 入力保持 + エラーメッセージ表示
+            if (errorDiv) {
+                const status = e.detail.xhr ? e.detail.xhr.status : '?';
+                errorDiv.textContent = `送信失敗 (HTTP ${status})。再度お試しください。`;
+                errorDiv.style.display = 'block';
+                setTimeout(function() {
+                    errorDiv.style.display = 'none';
+                    errorDiv.textContent = '';
+                }, 3000);
+            }
         }
     }
 });
@@ -939,6 +1038,69 @@ document.getElementById('clear-monitor-btn').addEventListener('click', () => {
         console.error('Clear error:', err);
     });
 });
+
+// ===========================================================
+// 規定文言セレクトボックス（指揮タブ用）
+// ===========================================================
+
+function updateTextareaMaxRows(maxRows) {
+    window._textareaMaxRows = maxRows;
+    if (window._textareaAdjust) window._textareaAdjust();
+}
+
+function updatePhraseSelect(phrases) {
+    const container = document.getElementById('template-phrase-container');
+    const sel = document.getElementById('template-phrase-select');
+
+    // 既存オプション（デフォルト以外）を削除
+    while (sel.options.length > 1) sel.remove(1);
+
+    if (!phrases || phrases.length === 0) {
+        container.style.display = 'none';
+        return;
+    }
+
+    phrases.forEach(p => {
+        const opt = document.createElement('option');
+        opt.value = p.text;
+        opt.textContent = p.label;
+        sel.appendChild(opt);
+    });
+    container.style.display = '';
+}
+
+// 規定文言セレクト: 選択時にカーソル位置へ追記
+document.getElementById('template-phrase-select').addEventListener('change', (e) => {
+    const text = e.target.value;
+    if (!text) return;
+
+    const ta = document.querySelector('textarea[name="instruction"]');
+    const start = ta.selectionStart;
+    const end = ta.selectionEnd;
+    const before = ta.value.substring(0, start);
+    const after = ta.value.substring(end);
+    ta.value = before + text + after;
+    // カーソルを追記後の位置へ
+    ta.selectionStart = ta.selectionEnd = start + text.length;
+    ta.focus();
+    ta.dispatchEvent(new Event('input'));
+
+    // セレクトをデフォルトに戻す（連続追記可能）
+    e.target.selectedIndex = 0;
+});
+
+// ページ読み込み時にtextarea_max_rowsと規定文言を取得
+(async function() {
+    try {
+        const res = await fetch('{{ base_path }}/api/settings');
+        if (!res.ok) return;
+        const data = await res.json();
+        updateTextareaMaxRows(data.ui.textarea_max_rows);
+        updatePhraseSelect(data.ui.template_phrases || []);
+    } catch (e) {
+        console.error('設定の読み込みに失敗:', e);
+    }
+})();
 
 </script>
 {% endblock %}

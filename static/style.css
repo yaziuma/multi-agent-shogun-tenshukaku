@@ -238,8 +238,9 @@ form {
 
 textarea[name="instruction"] {
     width: 100%;
-    min-height: 140px;
-    resize: vertical;
+    min-height: auto;
+    resize: none;
+    overflow-y: hidden;
 
     color: #f5f1e8;
     background:
@@ -586,12 +587,10 @@ footer p {
     }
 
     /* テキスト入力を「読める・打てる」サイズに */
-    textarea[name="instruction"] {
+    textarea[name=”instruction”] {
         font-size: 16px; /* iOSの自動ズーム回避にも効く */
         line-height: 1.4;
         padding: 12px;
-        min-height: 24vh; /* これで“書ける”高さになる */
-        max-height: 40vh;
         width: 100%;
         box-sizing: border-box;
     }
