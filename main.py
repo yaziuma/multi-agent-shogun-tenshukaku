@@ -1,7 +1,16 @@
+import asyncio
+import base64
+import logging
 import os
+import re
 import tempfile
+import uuid
 from contextlib import asynccontextmanager
+from datetime import datetime
 from pathlib import Path
+
+logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
+logger = logging.getLogger(__name__)
 
 import uvicorn
 import yaml
@@ -22,6 +31,9 @@ from ws.tmux_bridge import TmuxBridge
 async def lifespan(app: FastAPI):
     """Application lifespan: startup and shutdown hooks."""
     # Startup
+    _init_image_save_dir()
+    cleanup_task = asyncio.create_task(_periodic_cleanup())
+
     settings = load_settings()
     tmux_bridge = TmuxBridge()
     runtime = TmuxRuntime(
@@ -65,6 +77,7 @@ async def lifespan(app: FastAPI):
     yield
 
     # Shutdown
+    cleanup_task.cancel()
     await monitor_broadcaster.stop()
     await shogun_broadcaster.stop()
     runtime.shutdown()
@@ -159,6 +172,132 @@ class SettingsPayload(BaseModel):
     monitor: MonitorSettingsUpdate
     shogun: ShogunSettingsUpdate
     ui: UISettingsUpdate
+
+
+MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10MB
+
+# 画像一時保存ディレクトリ
+IMAGE_SAVE_DIR = "/tmp/tenshukaku-images"
+IMAGE_MAX_FILES = 50
+IMAGE_TTL_SECONDS = 30 * 60  # 30分
+
+_MIME_TO_EXT = {
+    "image/png": "png",
+    "image/jpeg": "jpeg",
+    "image/gif": "gif",
+    "image/webp": "webp",
+}
+_IMAGE_MIMES = frozenset(_MIME_TO_EXT.keys())
+
+# Allow-list for accepted file extensions (case-insensitive)
+_ALLOWED_EXTS = frozenset({
+    "png", "jpg", "jpeg", "gif", "webp",  # images
+    "pdf",                                  # documents
+    "txt", "md", "log", "csv",              # text
+    "py", "js", "ts", "html", "css",        # code
+    "yaml", "yml", "json",                  # config/data
+})
+
+
+def _get_file_ext(mime_type: str, file_name: str) -> str:
+    """Return safe file extension: MIME-table for images, filename-based for others."""
+    if mime_type in _MIME_TO_EXT:
+        return _MIME_TO_EXT[mime_type]
+    ext = os.path.splitext(file_name)[1].lstrip(".")
+    # Sanitize: allow only alphanumeric (prevents traversal via crafted extensions)
+    ext = re.sub(r"[^a-zA-Z0-9]", "", ext)
+    return ext.lower() if ext else ""
+
+_MAGIC_BYTES: dict[str, bytes | None] = {
+    "image/png": b"\x89PNG\r\n\x1a\n",
+    "image/jpeg": b"\xff\xd8\xff",
+    "image/gif": b"GIF8",
+    "image/webp": None,  # RIFFxxxxWEBP (別途確認)
+}
+
+
+def _validate_magic_bytes(data: bytes, mime_type: str) -> bool:
+    if mime_type == "image/webp":
+        return data[:4] == b"RIFF" and data[8:12] == b"WEBP"
+    magic = _MAGIC_BYTES.get(mime_type)
+    if magic is None:
+        return False
+    return data[: len(magic)] == magic
+
+
+def _build_save_path(ext: str) -> str:
+    timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+    hash8 = str(uuid.uuid4()).replace("-", "")[:8]
+    filename = f"tenshukaku_{timestamp}_{hash8}.{ext}"
+    path = os.path.join(IMAGE_SAVE_DIR, filename)
+    resolved = os.path.realpath(path)
+    save_dir_real = os.path.realpath(IMAGE_SAVE_DIR) + os.sep
+    if not resolved.startswith(save_dir_real):
+        raise ValueError(f"Path traversal detected: {resolved}")
+    return resolved
+
+
+def _init_image_save_dir() -> None:
+    os.makedirs(IMAGE_SAVE_DIR, exist_ok=True)
+    os.chmod(IMAGE_SAVE_DIR, 0o700)
+    # 起動時: 既存の tenshukaku_* ファイルを全削除
+    for f in Path(IMAGE_SAVE_DIR).glob("tenshukaku_*"):
+        try:
+            f.unlink()
+        except OSError:
+            pass
+    logger.info("[IMAGE-SAVE] initialized %s, old files removed", IMAGE_SAVE_DIR)
+
+
+def _cleanup_old_images() -> None:
+    now = datetime.now().timestamp()
+    save_dir = Path(IMAGE_SAVE_DIR)
+    files = sorted(save_dir.glob("tenshukaku_*"), key=lambda p: p.stat().st_mtime)
+
+    # TTL超過ファイルを削除
+    for f in files:
+        try:
+            if now - f.stat().st_mtime > IMAGE_TTL_SECONDS:
+                f.unlink()
+        except OSError:
+            pass
+
+    # ファイル数上限: 最古から削除
+    remaining = sorted(save_dir.glob("tenshukaku_*"), key=lambda p: p.stat().st_mtime)
+    while len(remaining) > IMAGE_MAX_FILES:
+        try:
+            remaining.pop(0).unlink()
+        except OSError:
+            remaining.pop(0)
+
+
+async def _periodic_cleanup() -> None:
+    while True:
+        await asyncio.sleep(5 * 60)  # 5分おき
+        try:
+            _cleanup_old_images()
+        except Exception as exc:
+            logger.warning("[IMAGE-CLEANUP] error: %s", exc)
+
+
+class FilePasteRequest(BaseModel):
+    target: str = ""  # tmux target pane (empty = shogun pane from settings)
+    file_b64: str  # Base64-encoded file data (raw, without data URI prefix)
+    file_name: str = "file.bin"
+    file_size: int = 0  # optional, informational only
+    mime_type: str = "application/octet-stream"
+    message_prefix: str = ""  # optional prefix for the tmux send-keys message
+
+
+class ImagePasteRequest(BaseModel):
+    """Backward-compatible alias for FilePasteRequest (image-only legacy clients)."""
+
+    target: str = ""
+    image_b64: str
+    file_name: str = "image.png"
+    file_size: int = 0
+    mime_type: str = "image/png"
+    message_prefix: str = ""
 
 
 @app.post("/api/command")
@@ -353,6 +492,149 @@ async def update_settings(request: Request, body: SettingsPayload):
     # Update in-memory state
     request.app.state.settings = full
     return {"status": "saved"}
+
+
+# Allow-list: only these tmux target formats are accepted for image paste.
+# Format: "session_name:window_index.pane_index" (e.g., "shogun:0.0")
+# Regex: alphanumeric/underscore/hyphen session names, numeric window/pane indices.
+_TARGET_RE = re.compile(r"^[A-Za-z0-9_-]+:\d+\.\d+$")
+
+
+def _build_allowed_targets(settings: dict) -> set[str]:
+    """Build the set of allowed tmux targets from settings.yaml."""
+    tmux = settings.get("tmux", {})
+    allowed = set()
+    # Shogun pane is always allowed
+    session = tmux.get("shogun_session", "shogun")
+    pane = tmux.get("shogun_pane", "0.0")
+    allowed.add(f"{session}:{pane}")
+    return allowed
+
+
+@app.post("/api/file-paste")
+async def file_paste(request: Request, body: FilePasteRequest):
+    """Save a file to disk and send its path to the shogun tmux pane via send-keys.
+
+    Supports any file type. Claude Code can read images, PDFs, text, code, etc. via
+    the file path. For image MIMEs, magic bytes validation is applied. For other types,
+    the extension is derived from the filename.
+
+    Args:
+        body: JSON with file_b64 (Base64 data), file_name, mime_type,
+              and optional message_prefix, target
+
+    Returns:
+        {"status": "sent", "target": "...", "file_path": "...", "sent_message": "..."}
+
+    Raises:
+        HTTPException 400: Invalid target format or target not in allow-list
+        HTTPException 413: File exceeds 10MB limit
+        HTTPException 415: Image magic bytes mismatch
+        HTTPException 500: File save or send-keys failed
+    """
+    logger.info(
+        "[FILE-PASTE] endpoint called, file_name=%s, mime_type=%s",
+        body.file_name,
+        body.mime_type,
+    )
+
+    # Decode base64
+    try:
+        file_data = base64.b64decode(body.file_b64)
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=f"Invalid base64 data: {exc}") from exc
+
+    # Size check (after decode)
+    if len(file_data) > MAX_IMAGE_BYTES:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large (max {MAX_IMAGE_BYTES // (1024 * 1024)}MB, got {len(file_data) // (1024 * 1024)}MB)",
+        )
+
+    # Magic bytes validation for images only
+    if body.mime_type in _IMAGE_MIMES:
+        if not _validate_magic_bytes(file_data, body.mime_type):
+            raise HTTPException(
+                status_code=415,
+                detail=f"Image data does not match declared MIME type: {body.mime_type}",
+            )
+
+    bridge = request.app.state.tmux_bridge
+    settings = request.app.state.settings
+
+    # Resolve target pane (default: shogun pane from settings)
+    target = body.target
+    if not target:
+        tmux_settings = settings.get("tmux", {})
+        target = (
+            f"{tmux_settings.get('shogun_session', 'shogun')}"
+            f":{tmux_settings.get('shogun_pane', '0.0')}"
+        )
+
+    # Allow-list validation
+    if not _TARGET_RE.match(target):
+        raise HTTPException(
+            status_code=400,
+            detail="Invalid target format. Expected 'session:window.pane' (e.g., 'shogun:0.0')",
+        )
+    allowed_targets = _build_allowed_targets(settings)
+    if target not in allowed_targets:
+        raise HTTPException(
+            status_code=403,
+            detail=f"Target '{target}' is not in the allowed list: {sorted(allowed_targets)}",
+        )
+
+    # Extension allow-list validation
+    ext = _get_file_ext(body.mime_type, body.file_name)
+    if ext not in _ALLOWED_EXTS:
+        raise HTTPException(
+            status_code=415,
+            detail=f"File type not allowed (ext='{ext}'). Allowed: {sorted(_ALLOWED_EXTS)}",
+        )
+
+    # Save file
+    try:
+        file_path = _build_save_path(ext)
+        with open(file_path, "wb") as f:
+            f.write(file_data)
+        logger.info("[FILE-PASTE] saved to %s (%d bytes)", file_path, len(file_data))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to save file: {exc}") from exc
+
+    # Build send-keys message
+    safe_prefix = re.sub(r"[\x00-\x1f\x7f]", "", body.message_prefix)[:200]
+    if safe_prefix:
+        sent_message = f"{safe_prefix}: {file_path}"
+    else:
+        sent_message = f"ファイル: {file_path}"
+
+    # Send file path to shogun pane via tmux send-keys
+    success = bridge.send_to_shogun(sent_message)
+    logger.info("[FILE-PASTE] send_to_shogun result=%s, message=%s", success, sent_message)
+
+    if success:
+        return {
+            "status": "sent",
+            "target": target,
+            "file_path": file_path,
+            "sent_message": sent_message,
+        }
+    else:
+        raise HTTPException(status_code=500, detail="Failed to send file path via tmux send-keys")
+
+
+@app.post("/api/image-paste")
+async def image_paste(request: Request, body: ImagePasteRequest):
+    """Backward-compatible alias for /api/file-paste (image-only legacy clients)."""
+    file_req = FilePasteRequest(
+        target=body.target,
+        file_b64=body.image_b64,
+        file_name=body.file_name,
+        file_size=body.file_size,
+        mime_type=body.mime_type,
+        message_prefix=body.message_prefix,
+    )
+    return await file_paste(request, file_req)
 
 
 @app.websocket("/ws")
