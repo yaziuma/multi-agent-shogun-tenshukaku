@@ -3,7 +3,7 @@
     <button type="button" class="btn-toggle-all" data-action="close-all" hx-disable>全て閉じる</button>
     <button type="button" class="btn-refresh" onclick="document.body.dispatchEvent(new Event('refresh-history'))" hx-disable>🔄 更新</button>
 </div>
-<div class="history-list" hx-get="/api/history" hx-trigger="refresh-history from:body" hx-target=".history-list" hx-select=".history-list" hx-swap="outerHTML">
+<div class="history-list" hx-get="{{ base_path }}/api/history" hx-trigger="refresh-history from:body" hx-target=".history-list" hx-select=".history-list" hx-swap="outerHTML">
     {% for cmd in commands|default([]) %}
     <div class="history-item {% if cmd.status == 'done' %}done{% else %}pending{% endif %}">
         <span class="cmd-id">{{ cmd.cmd_id }}</span>

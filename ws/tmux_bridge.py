@@ -329,6 +329,54 @@ class TmuxBridge:
         # Fallback to direct read
         return dashboard_path.read_text()
 
+    def write_to_pane_tty(self, target: str, sequence: str) -> bool:
+        """Write data directly to a pane's TTY device.
+
+        Bypasses tmux send-keys (which has text-only/length limits) and writes
+        binary/escape sequences directly to the PTY device file. Required for
+        iTerm2 Inline Image Protocol (OSC 1337) and similar escape sequences.
+
+        Args:
+            target: tmux target pane (e.g., "shogun:0.0", "multiagent:1")
+            sequence: Data to write, may contain ESC sequences
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            result = subprocess.run(
+                ["tmux", "display-message", "-p", "-t", target, "#{pane_tty}"],
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            tty_path = result.stdout.strip()
+            if not tty_path:
+                return False
+            with open(tty_path, "wb") as f:
+                f.write(sequence.encode("utf-8"))
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError, OSError):
+            return False
+
+    def enable_passthrough(self) -> bool:
+        """Enable tmux allow-passthrough for OSC/Kitty graphics protocol.
+
+        Must be set for escape sequences like OSC 1337 to pass through tmux
+        to the application inside the pane.
+
+        Returns:
+            True if successful, False otherwise
+        """
+        try:
+            subprocess.run(
+                ["tmux", "set-option", "-g", "allow-passthrough", "on"],
+                check=True,
+            )
+            return True
+        except (subprocess.CalledProcessError, FileNotFoundError):
+            return False
+
     def read_command_history(self) -> list:
         """
         Read command history from queue/shogun_to_karo.yaml.

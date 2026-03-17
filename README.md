@@ -24,6 +24,48 @@ The **Chat Log** section displays a conversation-style view of interactions: use
 
 ![Command Tab](assets/screenshots/tab-command.png)
 
+#### File Attachment (📎)
+
+The **📎 file attachment button** sits to the right of the textarea, allowing files to be sent directly to Claude Code's tmux pane via the file-path delivery mechanism.
+
+![Command Tab with File Attachment](assets/screenshots/tab-command-attach.png)
+
+**How it works:**
+
+1. The browser Base64-encodes the file and sends it to `/api/file-paste`
+2. The server saves the file to `/tmp/tenshukaku-images/` with a timestamp+UUID filename
+3. The file path is delivered to the Shogun pane via `tmux send-keys`
+4. Claude Code receives the path and reads the file using the `Read` tool — enabling full recognition of images, PDFs, text, code files, and more
+
+**Supported input methods:**
+- **📎 button** — click to open a file picker (multiple files supported)
+- **Drag & drop** — drag files onto the command input section; a drop overlay appears on `dragenter`
+- **Ctrl+V / paste** — paste images from the clipboard directly into the textarea
+- Files are **staged** as chips below the textarea and sent together with the next text message
+
+**Accepted file types** (extension allow-list):
+
+| Category | Extensions |
+|----------|-----------|
+| Images | `png`, `jpg`, `jpeg`, `gif`, `webp` |
+| Documents | `pdf` |
+| Text | `txt`, `md`, `log`, `csv` |
+| Code | `py`, `js`, `ts`, `html`, `css` |
+| Config / Data | `yaml`, `yml`, `json` |
+
+Files outside this list are rejected with HTTP 415.
+
+**Security:**
+- Images are validated against magic bytes (PNG/JPEG/GIF/WebP signatures) before saving
+- Non-image files are validated by extension from the allow-list above
+- Path traversal prevention via `os.path.realpath()` check
+- File size limit: 10 MB (app-level); images >5 MB are resized client-side (Canvas, JPEG 85%) before upload
+
+**Automatic cleanup:**
+- On startup: all existing `tenshukaku_*` files in `/tmp/tenshukaku-images/` are deleted
+- Every 5 minutes: files older than 30 minutes are removed
+- File count cap: oldest files are pruned when the directory exceeds 50 entries
+
 ### Monitor Tab (監視)
 
 Real-time grid view of all agent panes using WebSocket delta updates for efficient bandwidth usage. Update interval is configurable (default: 5 seconds). A **Clear Display** button resets the monitor view without affecting tmux pane history (non-destructive). User input lines are highlighted in light blue for easy identification.
@@ -72,6 +114,8 @@ Browser (HTTP + WebSocket)
     ├── GET  /api/ws-config → WebSocket reconnection configuration
     ├── GET  /api/settings  → Read user-configurable settings (JSON)
     ├── PUT  /api/settings  → Update and persist settings atomically
+    ├── POST /api/file-paste → Save file to /tmp/tenshukaku-images/ and send path via send-keys
+    ├── POST /api/image-paste → Backward-compatible alias for /api/file-paste (image-only legacy)
     ├── WS   /ws            → Real-time shogun pane output (delta)
     └── WS   /ws/monitor    → Real-time all-pane monitoring (delta)
     │

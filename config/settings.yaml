@@ -22,7 +22,7 @@ tmux:
 ui:
   template_phrases:
   - label: 状況確認
-    text: 状況確認
+    text: 状況を確認せよ。
   - label: 家老呼ぶ
     text: 家老に確認しろ！
   - label: コンテキスト確認
