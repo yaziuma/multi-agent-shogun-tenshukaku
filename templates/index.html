@@ -15,23 +15,13 @@
         <section class="command-input">
             <h2>💬 将軍との会話</h2>
             <form hx-post="{{ base_path }}/api/command" hx-target="#command-result" hx-swap="innerHTML"
-                  hx-on::after-request="if(event.detail.successful) { this.reset(); onCommandSuccess(); }">
-                <div style="display:flex; gap:6px; align-items:stretch;">
-                    <textarea name="instruction" rows="5" placeholder="将軍に話しかける..." style="flex:1;"></textarea>
-                    <button type="button" id="file-attach-btn" title="ファイルを添付（PDF・画像・テキスト等）"
-                            style="background:#fff8ee; border:2px solid #7a4419; border-radius:4px; cursor:pointer; font-size:20px; color:#7a4419; padding:0 12px; flex-shrink:0; line-height:1;">📎</button>
-                </div>
-                <!-- 添付ファイルリスト -->
-                <div id="file-chips-container" style="display:none; margin-top:4px; flex-wrap:wrap; gap:4px;"></div>
-                <div id="file-drop-overlay" style="display:none; border: 2px dashed #888; border-radius: 6px; padding: 10px 16px; color: #999; font-size: 13px; text-align: center; margin-top: 8px;">
-                    📎 ここにドロップして将軍に送る
-                </div>
+                  hx-on::after-request="if(event.detail.successful) this.reset()">
+                <textarea name="instruction" rows="5" placeholder="将軍に話しかける..."></textarea>
                 <div class="btn-row">
                     <button type="submit">送信</button>
                     <button type="button" id="esc-btn" class="esc-btn">Esc</button>
                 </div>
             </form>
-            <div id="file-paste-status" style="display:none; margin-top:6px; font-size:13px; padding: 6px 10px; border-radius: 4px;"></div>
             <div id="command-result"></div>
         </section>
 
@@ -467,15 +457,6 @@ document.body.addEventListener('htmx:afterRequest', (e) => {
         }
     }
 });
-
-// ペンディングファイルをフォーム送信後に送る
-function onCommandSuccess() {
-    if (pendingFiles.length > 0) {
-        const filesToSend = pendingFiles.slice();
-        clearAllFileChips();
-        filesToSend.forEach(function(f) { sendFileToShogun(f); });
-    }
-}
 
 // ===========================================================
 // ReconnectingWebSocket: 殿の最終確定仕様準拠
@@ -958,139 +939,6 @@ document.getElementById('clear-monitor-btn').addEventListener('click', () => {
         console.error('Clear error:', err);
     });
 });
-
-// ===========================================================
-// ファイル添付機能: 📎ボタン / Ctrl+V / ドラッグ&ドロップ → /api/file-paste
-// ===========================================================
-const IMAGE_RESIZE_THRESHOLD = 5 * 1024 * 1024;
-const IMAGE_MAX_DIMENSION = 2048;
-
-let pendingFiles = [];
-
-function renderFileChips() {
-    const container = document.getElementById('file-chips-container');
-    if (!container) return;
-    if (pendingFiles.length === 0) { container.style.display = 'none'; container.innerHTML = ''; return; }
-    container.style.display = 'flex';
-    container.innerHTML = '';
-    pendingFiles.forEach(function(file, i) {
-        const chip = document.createElement('div');
-        chip.style.cssText = 'display:flex; align-items:center; gap:4px; padding:2px 6px; background:#f0f0f0; border:1px solid #ccc; border-radius:4px; font-size:12px; color:#333; max-width:200px;';
-        const icon = document.createElement('span'); icon.textContent = '📎'; icon.style.cssText = 'font-size:11px; flex-shrink:0;';
-        const name = document.createElement('span'); name.textContent = file.name || '（名前なし）'; name.style.cssText = 'flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;';
-        const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = '×'; btn.title = '添付を解除';
-        btn.style.cssText = 'background:none; border:none; cursor:pointer; color:#666; font-size:13px; padding:0 1px; flex-shrink:0; line-height:1;';
-        btn.addEventListener('click', (function(idx) { return function() { removeFileChip(idx); }; })(i));
-        chip.appendChild(icon); chip.appendChild(name); chip.appendChild(btn);
-        container.appendChild(chip);
-    });
-}
-function addFileChip(file) { pendingFiles.push(file); renderFileChips(); }
-function removeFileChip(index) { pendingFiles.splice(index, 1); renderFileChips(); }
-function clearAllFileChips() { pendingFiles = []; renderFileChips(); }
-
-function showFileStatus(msg, isError) {
-    const el = document.getElementById('file-paste-status');
-    if (!el) return;
-    el.textContent = msg; el.style.color = isError ? '#c0392b' : '#27ae60'; el.style.display = 'block';
-    if (!isError) setTimeout(() => { el.style.display = 'none'; }, 5000);
-}
-
-function resizeImageIfNeeded(file) {
-    return new Promise(function(resolve) {
-        if (file.size <= IMAGE_RESIZE_THRESHOLD) { resolve(file); return; }
-        const canvas = document.createElement('canvas');
-        const img = new Image();
-        const url = URL.createObjectURL(file);
-        img.onload = function() {
-            let w = img.width, h = img.height;
-            if (w > IMAGE_MAX_DIMENSION || h > IMAGE_MAX_DIMENSION) {
-                const ratio = Math.min(IMAGE_MAX_DIMENSION / w, IMAGE_MAX_DIMENSION / h);
-                w = Math.round(w * ratio); h = Math.round(h * ratio);
-            }
-            canvas.width = w; canvas.height = h;
-            canvas.getContext('2d').drawImage(img, 0, 0, w, h);
-            URL.revokeObjectURL(url);
-            canvas.toBlob(function(blob) {
-                resolve(blob ? new File([blob], file.name.replace(/\.[^.]+$/, '.jpeg'), {type: 'image/jpeg'}) : file);
-            }, 'image/jpeg', 0.85);
-        };
-        img.onerror = function() { URL.revokeObjectURL(url); resolve(file); };
-        img.src = url;
-    });
-}
-
-function sendFileToShogun(file) {
-    if (!file) return;
-    showFileStatus('📤 ファイルを送信中...', false);
-    const isImage = file.type.startsWith('image/');
-    const processAndSend = function(fileToSend) {
-        const reader = new FileReader();
-        reader.onload = function(e) {
-            const dataUrl = e.target.result;
-            const comma = dataUrl.indexOf(',');
-            if (comma === -1) { showFileStatus('❌ ファイルデータの変換に失敗しました', true); return; }
-            const file_b64 = dataUrl.substring(comma + 1);
-            fetch('{{ base_path }}/api/file-paste', {
-                method: 'POST',
-                headers: {'Content-Type': 'application/json'},
-                body: JSON.stringify({
-                    file_b64: file_b64,
-                    file_name: fileToSend.name || file.name || 'file.bin',
-                    mime_type: fileToSend.type || file.type || 'application/octet-stream',
-                    message_prefix: ''
-                })
-            })
-            .then(res => { if (!res.ok) return res.text().then(t => { throw new Error(t || 'HTTP ' + res.status); }); return res.json(); })
-            .then(data => { const fp = data.file_path ? ' → ' + data.file_path.split('/').pop() : ''; showFileStatus('✅ ファイルを将軍に送信しました' + fp, false); })
-            .catch(err => { showFileStatus('❌ 送信失敗: ' + err.message, true); });
-        };
-        reader.onerror = function() { showFileStatus('❌ ファイルの読み取りに失敗しました', true); };
-        reader.readAsDataURL(fileToSend);
-    };
-    if (isImage) { resizeImageIfNeeded(file).then(processAndSend); } else { processAndSend(file); }
-}
-
-// pasteイベント: クリップボードから画像を取得
-document.addEventListener('paste', function(e) {
-    const items = e.clipboardData && e.clipboardData.items;
-    if (items) {
-        for (let i = 0; i < items.length; i++) {
-            if (items[i].kind === 'file' && items[i].type.startsWith('image/')) {
-                const file = items[i].getAsFile();
-                if (file) { e.preventDefault(); addFileChip(file); return; }
-            }
-        }
-    }
-});
-
-// 📎ボタン: クリックでファイル選択
-(function() {
-    const btn = document.getElementById('file-attach-btn');
-    if (!btn) return;
-    btn.addEventListener('click', () => {
-        const input = document.createElement('input');
-        input.type = 'file'; input.accept = '*/*'; input.multiple = true;
-        input.onchange = (e) => { const files = e.target.files; if (files) for (let i = 0; i < files.length; i++) addFileChip(files[i]); };
-        input.click();
-    });
-})();
-
-// ドラッグ&ドロップ
-(function() {
-    const section = document.querySelector('.command-input');
-    const overlay = document.getElementById('file-drop-overlay');
-    if (!section || !overlay) return;
-    let dragCount = 0;
-    section.addEventListener('dragenter', (e) => { e.preventDefault(); dragCount++; overlay.style.display = 'block'; });
-    section.addEventListener('dragleave', () => { dragCount--; if (dragCount <= 0) { dragCount = 0; overlay.style.display = 'none'; } });
-    section.addEventListener('dragover', (e) => { e.preventDefault(); });
-    overlay.addEventListener('drop', (e) => {
-        e.preventDefault(); dragCount = 0; overlay.style.display = 'none';
-        const files = e.dataTransfer && e.dataTransfer.files;
-        if (files) for (let i = 0; i < files.length; i++) addFileChip(files[i]);
-    });
-})();
 
 </script>
 {% endblock %}
