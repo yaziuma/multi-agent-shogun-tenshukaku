@@ -1304,13 +1304,6 @@ function resizeImageIfNeeded(file) {
 
 function sendFileToShogun(file) {
     if (!file) return;
-    if (file.size > 0 && file.size > IMAGE_MAX_BYTES) {
-        showFileStatus(
-            'ファイルが大きすぎます（最大10MB、現在 ' + (file.size/1024/1024).toFixed(1) + 'MB）',
-            true
-        );
-        return;
-    }
     console.log('[FILE-PASTE] file found:', file.name, 'size:', file.size, 'type:', file.type);
     showFileStatus('📤 ファイルを送信中...', false);
 
@@ -1325,15 +1318,6 @@ function sendFileToShogun(file) {
                 return;
             }
             const file_b64 = dataUrl.substring(comma + 1);
-            const actualFileSize = Math.floor(file_b64.length * 3 / 4) -
-                (file_b64.endsWith('==') ? 2 : file_b64.endsWith('=') ? 1 : 0);
-            if (actualFileSize > IMAGE_MAX_BYTES) {
-                showFileStatus(
-                    'ファイルが大きすぎます（最大10MB、現在 ' + (actualFileSize/1024/1024).toFixed(1) + 'MB）',
-                    true
-                );
-                return;
-            }
             const url = '{{ base_path }}/api/file-paste';
             console.log('[FILE-PASTE] sending to:', url);
             fetch(url, {

@@ -43,23 +43,10 @@ The **📎 file attachment button** sits to the right of the textarea, allowing 
 - **Ctrl+V / paste** — paste images from the clipboard directly into the textarea
 - Files are **staged** as chips below the textarea and sent together with the next text message
 
-**Accepted file types** (extension allow-list):
-
-| Category | Extensions |
-|----------|-----------|
-| Images | `png`, `jpg`, `jpeg`, `gif`, `webp` |
-| Documents | `pdf` |
-| Text | `txt`, `md`, `log`, `csv` |
-| Code | `py`, `js`, `ts`, `html`, `css` |
-| Config / Data | `yaml`, `yml`, `json` |
-
-Files outside this list are rejected with HTTP 415.
+**Accepted file types:** All file types accepted. The extension is derived from the filename (sanitized to alphanumeric characters only) and used as-is for saving. Images >5 MB are resized client-side (Canvas, JPEG 85%) before upload to reduce transfer size.
 
 **Security:**
-- Images are validated against magic bytes (PNG/JPEG/GIF/WebP signatures) before saving
-- Non-image files are validated by extension from the allow-list above
 - Path traversal prevention via `os.path.realpath()` check
-- File size limit: 10 MB (app-level); images >5 MB are resized client-side (Canvas, JPEG 85%) before upload
 
 **Automatic cleanup:**
 - On startup: all existing `tenshukaku_*` files in `/tmp/tenshukaku-images/` are deleted
