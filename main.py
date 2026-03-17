@@ -174,7 +174,7 @@ class SettingsPayload(BaseModel):
     ui: UISettingsUpdate
 
 
-MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10MB
+MAX_FILE_BYTES = 0  # No size limit
 
 # 画像一時保存ディレクトリ
 IMAGE_SAVE_DIR = "/tmp/tenshukaku-images"
@@ -187,18 +187,6 @@ _MIME_TO_EXT = {
     "image/gif": "gif",
     "image/webp": "webp",
 }
-_IMAGE_MIMES = frozenset(_MIME_TO_EXT.keys())
-
-# Allow-list for accepted file extensions (case-insensitive)
-_ALLOWED_EXTS = frozenset({
-    "png", "jpg", "jpeg", "gif", "webp",  # images
-    "pdf",                                  # documents
-    "txt", "md", "log", "csv",              # text
-    "py", "js", "ts", "html", "css",        # code
-    "yaml", "yml", "json",                  # config/data
-})
-
-
 def _get_file_ext(mime_type: str, file_name: str) -> str:
     """Return safe file extension: MIME-table for images, filename-based for others."""
     if mime_type in _MIME_TO_EXT:
@@ -206,23 +194,7 @@ def _get_file_ext(mime_type: str, file_name: str) -> str:
     ext = os.path.splitext(file_name)[1].lstrip(".")
     # Sanitize: allow only alphanumeric (prevents traversal via crafted extensions)
     ext = re.sub(r"[^a-zA-Z0-9]", "", ext)
-    return ext.lower() if ext else ""
-
-_MAGIC_BYTES: dict[str, bytes | None] = {
-    "image/png": b"\x89PNG\r\n\x1a\n",
-    "image/jpeg": b"\xff\xd8\xff",
-    "image/gif": b"GIF8",
-    "image/webp": None,  # RIFFxxxxWEBP (別途確認)
-}
-
-
-def _validate_magic_bytes(data: bytes, mime_type: str) -> bool:
-    if mime_type == "image/webp":
-        return data[:4] == b"RIFF" and data[8:12] == b"WEBP"
-    magic = _MAGIC_BYTES.get(mime_type)
-    if magic is None:
-        return False
-    return data[: len(magic)] == magic
+    return ext.lower() if ext else "bin"
 
 
 def _build_save_path(ext: str) -> str:
@@ -544,21 +516,6 @@ async def file_paste(request: Request, body: FilePasteRequest):
     except Exception as exc:
         raise HTTPException(status_code=400, detail=f"Invalid base64 data: {exc}") from exc
 
-    # Size check (after decode)
-    if len(file_data) > MAX_IMAGE_BYTES:
-        raise HTTPException(
-            status_code=413,
-            detail=f"File too large (max {MAX_IMAGE_BYTES // (1024 * 1024)}MB, got {len(file_data) // (1024 * 1024)}MB)",
-        )
-
-    # Magic bytes validation for images only
-    if body.mime_type in _IMAGE_MIMES:
-        if not _validate_magic_bytes(file_data, body.mime_type):
-            raise HTTPException(
-                status_code=415,
-                detail=f"Image data does not match declared MIME type: {body.mime_type}",
-            )
-
     bridge = request.app.state.tmux_bridge
     settings = request.app.state.settings
 
@@ -584,16 +541,9 @@ async def file_paste(request: Request, body: FilePasteRequest):
             detail=f"Target '{target}' is not in the allowed list: {sorted(allowed_targets)}",
         )
 
-    # Extension allow-list validation
-    ext = _get_file_ext(body.mime_type, body.file_name)
-    if ext not in _ALLOWED_EXTS:
-        raise HTTPException(
-            status_code=415,
-            detail=f"File type not allowed (ext='{ext}'). Allowed: {sorted(_ALLOWED_EXTS)}",
-        )
-
     # Save file
     try:
+        ext = _get_file_ext(body.mime_type, body.file_name)
         file_path = _build_save_path(ext)
         with open(file_path, "wb") as f:
             f.write(file_data)
