@@ -262,6 +262,37 @@ class ShogunBroadcaster:
             "ShogunBroadcaster: subscriber removed (total: %d)", len(self.subscribers)
         )
 
+    async def broadcast_image(self, seq: str, image_b64: str = "", mime_type: str = "") -> None:
+        """Broadcast OSC sequence directly to all subscribers for image display.
+
+        Bypasses the capture_pane pipeline (which strips escape sequences),
+        allowing images to be rendered in xterm.js with the image addon.
+
+        Args:
+            seq: OSC 1337 or other escape sequence containing the image data
+            image_b64: Raw Base64 image data (for <img> display in chat)
+            mime_type: MIME type of the image (e.g., "image/png")
+        """
+        logger.info(
+            "[BROADCAST] broadcast_image called, seq_length=%d, subscribers=%d",
+            len(seq),
+            len(self.subscribers),
+        )
+        if not self.subscribers:
+            logger.info("[BROADCAST] no subscribers, image not sent via WS")
+            return
+        payload = {"type": "image", "seq": seq, "image_b64": image_b64, "mime_type": mime_type}
+        dead_sockets = []
+        for ws in self.subscribers:
+            try:
+                await ws.send_json(payload)
+                logger.info("[BROADCAST] image sent to subscriber successfully")
+            except Exception as e:
+                logger.error("[BROADCAST] failed to send image to subscriber: %s", e)
+                dead_sockets.append(ws)
+        for ws in dead_sockets:
+            self.subscribers.discard(ws)
+
     async def _loop(self) -> None:
         """Main broadcast loop with delta updates."""
         while self.running:

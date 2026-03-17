@@ -1,0 +1,336 @@
+{% extends "base.html" %}
+
+{% block title %}設定 - 将軍パネル{% endblock %}
+
+{% block content %}
+<div class="container">
+    <div class="settings-header">
+        <a href="{{ base_path }}/" class="back-link" hx-disable>← 指揮画面へ戻る</a>
+        <h2>⚙️ 設定</h2>
+    </div>
+
+    <section class="settings-section">
+        <div id="settings-msg" style="display:none; margin-bottom:10px;"></div>
+
+        <!-- ポーリング設定 -->
+        <div class="settings-group">
+            <h3>監視ポーリング間隔</h3>
+            <div class="settings-row">
+                <label for="s-monitor-base">基本間隔 (ms)</label>
+                <input type="number" id="s-monitor-base" class="settings-input" min="100" max="60000" value="5000">
+            </div>
+            <div class="settings-row">
+                <label for="s-monitor-max">最大間隔 (ms)</label>
+                <input type="number" id="s-monitor-max" class="settings-input" min="100" max="60000" value="10000">
+            </div>
+        </div>
+
+        <div class="settings-group">
+            <h3>指揮ポーリング間隔</h3>
+            <div class="settings-row">
+                <label for="s-shogun-base">基本間隔 (ms)</label>
+                <input type="number" id="s-shogun-base" class="settings-input" min="100" max="60000" value="1000">
+            </div>
+            <div class="settings-row">
+                <label for="s-shogun-max">最大間隔 (ms)</label>
+                <input type="number" id="s-shogun-max" class="settings-input" min="100" max="60000" value="3000">
+            </div>
+        </div>
+
+        <div class="settings-group">
+            <h3>UI設定</h3>
+            <div class="settings-row">
+                <label for="s-textarea-rows">入力欄最大行数</label>
+                <input type="number" id="s-textarea-rows" class="settings-input" min="1" max="50" value="{{ settings.ui.textarea_max_rows | default(8) }}">
+            </div>
+        </div>
+
+        <!-- 規定文言管理 -->
+        <div class="settings-group">
+            <h3>規定文言管理</h3>
+            <table class="phrase-table" id="phrase-table">
+                <thead>
+                    <tr><th>ラベル</th><th>文言</th><th></th></tr>
+                </thead>
+                <tbody id="phrase-tbody">
+                    <!-- JS で動的生成 -->
+                </tbody>
+            </table>
+            <button type="button" id="add-phrase-btn" class="add-phrase-btn">＋ 追加</button>
+        </div>
+
+        <div class="settings-save-row">
+            <button type="button" id="settings-save-btn" class="settings-save-btn">💾 保存</button>
+        </div>
+    </section>
+</div>
+
+<style>
+.settings-header {
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    margin-bottom: 12px;
+}
+.settings-header h2 {
+    margin: 0;
+}
+.back-link {
+    padding: 6px 12px;
+    border-radius: 6px;
+    border: 1px solid rgba(120,70,25,0.3);
+    background: rgba(255,255,255,0.2);
+    text-decoration: none;
+    color: inherit;
+    font-size: 13px;
+    transition: background 0.15s;
+}
+.back-link:hover {
+    background: rgba(120,70,25,0.1);
+}
+.settings-section {
+    margin-top: 14px;
+    padding: 14px;
+    border-radius: 8px;
+    border: 2px solid rgba(90, 50, 20, 0.55);
+    background:
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='140' height='140'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='140' height='140' filter='url(%23n)' opacity='.12'/%3E%3C/svg%3E"),
+        linear-gradient(180deg, rgba(255, 255, 255, 0.25), transparent),
+        linear-gradient(180deg, #f5e6c8, #e8d5a3);
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.28);
+}
+.settings-group {
+    margin: 14px 0;
+    padding: 12px;
+    border-radius: 8px;
+    background: rgba(255,255,255,0.2);
+    border: 1px solid rgba(120,70,25,0.2);
+}
+.settings-group h3 {
+    margin: 0 0 10px;
+    font-size: 14px;
+    font-weight: 700;
+    color: rgba(120,70,25,0.9);
+}
+.settings-row {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin: 6px 0;
+}
+.settings-row label {
+    min-width: 160px;
+    font-size: 13px;
+}
+.settings-input {
+    width: 120px;
+    padding: 4px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(120,70,25,0.35);
+    background: rgba(255,255,255,0.35);
+    font-size: 13px;
+}
+.settings-input:focus {
+    outline: none;
+    border-color: rgba(120,70,25,0.7);
+}
+.phrase-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+    margin-bottom: 8px;
+}
+.phrase-table th {
+    text-align: left;
+    padding: 4px 8px;
+    border-bottom: 1px solid rgba(120,70,25,0.3);
+    font-weight: 700;
+    color: rgba(120,70,25,0.9);
+}
+.phrase-table td {
+    padding: 4px 8px;
+    vertical-align: middle;
+}
+.phrase-input-label, .phrase-input-text {
+    width: 100%;
+    padding: 3px 6px;
+    border-radius: 4px;
+    border: 1px solid rgba(120,70,25,0.3);
+    background: rgba(255,255,255,0.35);
+    font-size: 13px;
+}
+.phrase-del-btn {
+    padding: 2px 8px;
+    border-radius: 4px;
+    border: 1px solid rgba(200,50,50,0.4);
+    background: rgba(200,50,50,0.1);
+    cursor: pointer;
+    font-size: 12px;
+    color: rgba(180,30,30,0.9);
+}
+.phrase-del-btn:hover {
+    background: rgba(200,50,50,0.2);
+}
+.add-phrase-btn {
+    padding: 4px 12px;
+    border-radius: 4px;
+    border: 1px solid rgba(80,160,80,0.4);
+    background: rgba(80,160,80,0.1);
+    cursor: pointer;
+    font-size: 13px;
+    color: rgba(40,120,40,0.9);
+}
+.add-phrase-btn:hover {
+    background: rgba(80,160,80,0.2);
+}
+.settings-save-row {
+    margin-top: 16px;
+    text-align: right;
+}
+.settings-save-btn {
+    padding: 8px 20px;
+    border-radius: 6px;
+    border: 1px solid rgba(80,120,200,0.4);
+    background: rgba(80,120,200,0.15);
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 700;
+}
+.settings-save-btn:hover {
+    background: rgba(80,120,200,0.25);
+}
+.settings-msg-ok {
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: rgba(80,180,80,0.15);
+    border: 1px solid rgba(80,180,80,0.4);
+    color: rgba(30,130,30,0.9);
+    font-size: 13px;
+}
+.settings-msg-err {
+    padding: 8px 12px;
+    border-radius: 6px;
+    background: rgba(200,50,50,0.1);
+    border: 1px solid rgba(200,50,50,0.3);
+    color: rgba(180,30,30,0.9);
+    font-size: 13px;
+}
+</style>
+
+<script>
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML.replace(/"/g, '&quot;').replace(/'/g, '&#39;');
+}
+
+function renderPhrasesTable(phrases) {
+    const tbody = document.getElementById('phrase-tbody');
+    tbody.innerHTML = '';
+    phrases.forEach((p, i) => {
+        const tr = document.createElement('tr');
+        tr.dataset.idx = i;
+        tr.innerHTML = `
+            <td><input type="text" class="phrase-input-label" value="${escapeHtml(p.label)}" placeholder="ラベル"></td>
+            <td><input type="text" class="phrase-input-text" value="${escapeHtml(p.text)}" placeholder="文言テキスト"></td>
+            <td><button type="button" class="phrase-del-btn" data-idx="${i}">削除</button></td>
+        `;
+        tbody.appendChild(tr);
+    });
+}
+
+function getPhraseRows() {
+    const rows = [];
+    document.querySelectorAll('#phrase-tbody tr').forEach(tr => {
+        const label = tr.querySelector('.phrase-input-label')?.value.trim() || '';
+        const text = tr.querySelector('.phrase-input-text')?.value.trim() || '';
+        if (label || text) rows.push({ label, text });
+    });
+    return rows;
+}
+
+// 設定読み込み
+async function loadSettings() {
+    try {
+        const res = await fetch('{{ base_path }}/api/settings');
+        if (!res.ok) return;
+        const data = await res.json();
+
+        document.getElementById('s-monitor-base').value = data.monitor.base_interval_ms;
+        document.getElementById('s-monitor-max').value = data.monitor.max_interval_ms;
+        document.getElementById('s-shogun-base').value = data.shogun.base_interval_ms;
+        document.getElementById('s-shogun-max').value = data.shogun.max_interval_ms;
+        document.getElementById('s-textarea-rows').value = data.ui.textarea_max_rows;
+
+        renderPhrasesTable(data.ui.template_phrases || []);
+    } catch (e) {
+        console.error('設定の読み込みに失敗:', e);
+    }
+}
+
+// 「＋ 追加」ボタン
+document.getElementById('add-phrase-btn').addEventListener('click', () => {
+    const tbody = document.getElementById('phrase-tbody');
+    const idx = tbody.rows.length;
+    const tr = document.createElement('tr');
+    tr.dataset.idx = idx;
+    tr.innerHTML = `
+        <td><input type="text" class="phrase-input-label" placeholder="ラベル"></td>
+        <td><input type="text" class="phrase-input-text" placeholder="文言テキスト"></td>
+        <td><button type="button" class="phrase-del-btn" data-idx="${idx}">削除</button></td>
+    `;
+    tbody.appendChild(tr);
+});
+
+// 削除ボタン（イベント委譲）
+document.getElementById('phrase-tbody').addEventListener('click', (e) => {
+    if (e.target.classList.contains('phrase-del-btn')) {
+        e.target.closest('tr').remove();
+    }
+});
+
+// 「💾 保存」ボタン
+document.getElementById('settings-save-btn').addEventListener('click', async () => {
+    const msgEl = document.getElementById('settings-msg');
+    msgEl.style.display = 'none';
+
+    const payload = {
+        monitor: {
+            base_interval_ms: parseInt(document.getElementById('s-monitor-base').value, 10),
+            max_interval_ms: parseInt(document.getElementById('s-monitor-max').value, 10),
+        },
+        shogun: {
+            base_interval_ms: parseInt(document.getElementById('s-shogun-base').value, 10),
+            max_interval_ms: parseInt(document.getElementById('s-shogun-max').value, 10),
+        },
+        ui: {
+            textarea_max_rows: parseInt(document.getElementById('s-textarea-rows').value, 10),
+            template_phrases: getPhraseRows(),
+        },
+    };
+
+    try {
+        const res = await fetch('{{ base_path }}/api/settings', {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload),
+        });
+        const data = await res.json();
+        if (res.ok && data.status === 'saved') {
+            window.location.href = '{{ base_path }}/';
+        } else {
+            const detail = data.detail || JSON.stringify(data);
+            msgEl.className = 'settings-msg-err';
+            msgEl.textContent = '❌ 保存失敗: ' + detail;
+            msgEl.style.display = '';
+        }
+    } catch (e) {
+        msgEl.className = 'settings-msg-err';
+        msgEl.textContent = '❌ 通信エラー: ' + e;
+        msgEl.style.display = '';
+    }
+});
+
+loadSettings();
+</script>
+{% endblock %}

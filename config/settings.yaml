@@ -1,30 +1,31 @@
-server:
-  host: "0.0.0.0"
-  port: 30000
-
 bakuhu:
-  base_path: "/home/quieter/projects/multi-agent-bakuhu"
-
-tmux:
-  shogun_session: "shogun"
-  multiagent_session: "multiagent"
-  shogun_pane: "0.0"
-
-runtime:
-  thread_pool_workers: 2
-
+  base_path: /home/quieter/projects/multi-agent-bakuhu
+gunicorn:
+  workers: 2
 monitor:
   base_interval_ms: 5000
   max_interval_ms: 10000
   no_change_threshold: 2
-
+runtime:
+  thread_pool_workers: 2
+server:
+  host: 0.0.0.0
+  port: 30001
 shogun:
   base_interval_ms: 1000
   max_interval_ms: 3000
   no_change_threshold: 2
-
+tmux:
+  multiagent_session: multiagent
+  shogun_pane: '0.0'
+  shogun_session: shogun
 ui:
-  user_input_color: "#4FC3F7"
-
-gunicorn:
-  workers: 2
+  template_phrases:
+  - label: 状況確認
+    text: 状況を確認せよ。
+  - label: 家老呼ぶ
+    text: 家老に確認しろ！
+  - label: コンテキスト確認
+    text: /usage
+  textarea_max_rows: 5
+  user_input_color: '#4FC3F7'
