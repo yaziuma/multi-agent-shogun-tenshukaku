@@ -6,7 +6,7 @@
 # キャッシュ完全削除 + プロセス停止 + クリーン起動を一発で行う
 # 開発時のホットリロード（--reload）有効
 
-PROJECT_DIR="/home/quieter/projects/shogun-web-v2"
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_FILE="$PROJECT_DIR/config/settings.yaml"
 
 # 色定義
