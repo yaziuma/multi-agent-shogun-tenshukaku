@@ -6,7 +6,7 @@
 # キャッシュ完全削除 + プロセス停止 + クリーン起動を一発で行う
 # 開発時のホットリロード（--reload）有効
 
-PROJECT_DIR="/home/quieter/projects/shogun-web-v2"
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 CONFIG_FILE="$PROJECT_DIR/config/settings.yaml"
 
 # 色定義
@@ -85,7 +85,7 @@ else
     echo "  → uvicornプロセスは見つかりませんでした"
 fi
 
-# ポート30000を使用中のプロセスを停止
+# ポートを使用中のプロセスを停止
 PORT_PID=$(lsof -ti:$PORT 2>/dev/null || true)
 if [ -n "$PORT_PID" ]; then
     echo "  → ポート$PORT を使用中のプロセスを発見: PID $PORT_PID"

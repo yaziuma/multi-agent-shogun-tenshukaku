@@ -2,7 +2,7 @@
 
 set -e
 
-PROJECT_DIR="/home/quieter/projects/shogun-web-v2"
+PROJECT_DIR="$(cd "$(dirname "$0")" && pwd)"
 LOG_DIR="$PROJECT_DIR/logs"
 LOG_FILE="$LOG_DIR/shogun-web.log"
 
