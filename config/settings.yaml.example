@@ -34,11 +34,11 @@ tmux:
 
 ui:
   template_phrases:
-  - label: 状況確認
-    text: 状況を確認せよ。
-  - label: 家老呼ぶ
-    text: 家老に確認しろ！
-  - label: コンテキスト確認
-    text: /usage
+  - label: 'サンプル1'
+    text: 'ここにフレーズを入力してください'
+  - label: 'サンプル2'
+    text: 'よく使うコマンドや指示文を入力'
+  - label: 'サンプル3'
+    text: 'テンプレートフレーズの例'
   textarea_max_rows: 5
   user_input_color: '#4FC3F7'
