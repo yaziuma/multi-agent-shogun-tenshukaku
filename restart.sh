@@ -20,34 +20,50 @@ echo -e "${GREEN}🔄 shogun-web 再起動スクリプト${NC}"
 echo -e "${GREEN}======================================${NC}"
 echo ""
 
+# venv 存在チェック
+if [ ! -d "$PROJECT_DIR/.venv" ]; then
+    echo -e "${RED}❌ 仮想環境が見つかりません: $PROJECT_DIR/.venv${NC}"
+    echo ""
+    echo "セットアップ手順:"
+    echo "  cd $PROJECT_DIR"
+    echo "  uv sync          # uv使用の場合（推奨）"
+    echo "  # または: python -m venv .venv && .venv/bin/pip install -r requirements.txt"
+    exit 1
+fi
+
 # ============================================================
 # 0. 設定ファイルからポート番号・ホストを取得
 # ============================================================
 echo -e "${YELLOW}[0/3] 設定ファイル読み込み中...${NC}"
 
+if [ ! -f "$CONFIG_FILE" ]; then
+    echo -e "${RED}❌ 設定ファイルが見つかりません: $CONFIG_FILE${NC}"
+    echo ""
+    echo "セットアップ手順:"
+    echo "  cp config/settings.yaml.example config/settings.yaml"
+    echo "  # settings.yaml を編集して bakuhu.base_path を設定してください"
+    exit 1
+fi
+
+echo "  → 設定ファイル: $CONFIG_FILE"
+
 # デフォルト値
 HOST="0.0.0.0"
-PORT=30000
+PORT=30001
 
-if [ -f "$CONFIG_FILE" ]; then
-    echo "  → 設定ファイル: $CONFIG_FILE"
+# config/settings.yaml から host と port を読み取る（start.sh と同じ方式）
+READ_HOST=$(grep -A2 '^server:' "$CONFIG_FILE" | grep 'host:' | awk '{print $2}' | tr -d '"')
+READ_PORT=$(grep -A2 '^server:' "$CONFIG_FILE" | grep 'port:' | awk '{print $2}')
 
-    # config/settings.yaml から host と port を読み取る（start.sh と同じ方式）
-    READ_HOST=$(grep -A2 '^server:' "$CONFIG_FILE" | grep 'host:' | awk '{print $2}' | tr -d '"')
-    READ_PORT=$(grep -A2 '^server:' "$CONFIG_FILE" | grep 'port:' | awk '{print $2}')
-
-    if [ -n "$READ_HOST" ]; then
-        HOST="$READ_HOST"
-    fi
-
-    if [ -n "$READ_PORT" ]; then
-        PORT="$READ_PORT"
-    fi
-
-    echo "  ✓ 設定: HOST=$HOST, PORT=$PORT"
-else
-    echo "  ⚠️  設定ファイルが見つかりません。デフォルト値を使用: HOST=$HOST, PORT=$PORT"
+if [ -n "$READ_HOST" ]; then
+    HOST="$READ_HOST"
 fi
+
+if [ -n "$READ_PORT" ]; then
+    PORT="$READ_PORT"
+fi
+
+echo "  ✓ 設定: HOST=$HOST, PORT=$PORT"
 
 echo ""
 

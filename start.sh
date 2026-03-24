@@ -12,9 +12,24 @@ CONFIG_FILE="$PROJECT_DIR/config/settings.yaml"
 echo "🚀 shogun-web-v2 起動スクリプト"
 echo "================================"
 
+# venv 存在チェック
+if [ ! -d "$PROJECT_DIR/.venv" ]; then
+    echo "❌ 仮想環境が見つかりません: $PROJECT_DIR/.venv"
+    echo ""
+    echo "セットアップ手順:"
+    echo "  cd $PROJECT_DIR"
+    echo "  uv sync          # uv使用の場合（推奨）"
+    echo "  # または: python -m venv .venv && .venv/bin/pip install -r requirements.txt"
+    exit 1
+fi
+
 # 設定ファイルから host と port を読み取る
 if [ ! -f "$CONFIG_FILE" ]; then
     echo "❌ 設定ファイルが見つかりません: $CONFIG_FILE"
+    echo ""
+    echo "セットアップ手順:"
+    echo "  cp config/settings.yaml.example config/settings.yaml"
+    echo "  # settings.yaml を編集して bakuhu.base_path を設定してください"
     exit 1
 fi
 

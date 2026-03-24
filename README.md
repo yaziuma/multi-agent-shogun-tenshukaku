@@ -153,6 +153,9 @@ cd multi-agent-shogun-tenshukaku
 
 # Install dependencies
 uv sync
+
+# Create configuration file from example
+cp config/settings.yaml.example config/settings.yaml
 ```
 
 ### Configuration

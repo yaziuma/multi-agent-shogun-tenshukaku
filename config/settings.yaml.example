@@ -1,24 +1,37 @@
+# shogun-web-v2 (天守閣) 設定ファイル
+# 使用方法: cp config/settings.yaml.example config/settings.yaml
+# 必須: bakuhu.base_path を自分の環境のパスに変更してください
+
 bakuhu:
+  # multi-agent-bakuhu リポジトリのパス（要変更）
   base_path: /path/to/your/multi-agent-bakuhu
+
 gunicorn:
   workers: 2
+
 monitor:
   base_interval_ms: 5000
   max_interval_ms: 10000
   no_change_threshold: 2
+
 runtime:
   thread_pool_workers: 2
+
 server:
   host: 0.0.0.0
-  port: 30001
+  port: 30001  # 使用するポート番号（変更する場合はファイアウォール設定も確認）
+
 shogun:
   base_interval_ms: 1000
   max_interval_ms: 3000
   no_change_threshold: 2
+
 tmux:
+  # tmuxセッション名（環境に合わせて変更）
   multiagent_session: multiagent
   shogun_pane: '0.0'
   shogun_session: shogun
+
 ui:
   template_phrases:
   - label: 状況確認
