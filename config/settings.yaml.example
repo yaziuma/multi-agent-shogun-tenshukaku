@@ -1,5 +1,5 @@
 bakuhu:
-  base_path: /home/quieter/projects/multi-agent-bakuhu
+  base_path: /path/to/your/multi-agent-bakuhu
 gunicorn:
   workers: 2
 monitor:
