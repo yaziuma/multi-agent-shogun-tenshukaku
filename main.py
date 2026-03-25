@@ -212,13 +212,7 @@ def _build_save_path(ext: str) -> str:
 def _init_image_save_dir() -> None:
     os.makedirs(IMAGE_SAVE_DIR, exist_ok=True)
     os.chmod(IMAGE_SAVE_DIR, 0o700)
-    # 起動時: 既存の tenshukaku_* ファイルを全削除
-    for f in Path(IMAGE_SAVE_DIR).glob("tenshukaku_*"):
-        try:
-            f.unlink()
-        except OSError:
-            pass
-    logger.info("[IMAGE-SAVE] initialized %s, old files removed", IMAGE_SAVE_DIR)
+    logger.info("[IMAGE-SAVE] initialized %s", IMAGE_SAVE_DIR)
 
 
 def _cleanup_old_images() -> None:
@@ -571,6 +565,43 @@ async def file_paste(request: Request, body: FilePasteRequest):
         }
     else:
         raise HTTPException(status_code=500, detail="Failed to send file path via tmux send-keys")
+
+
+@app.delete("/api/files/{filename}")
+async def delete_file(filename: str):
+    """Delete a specific file from the image save directory.
+
+    Args:
+        filename: filename only (no path separators allowed)
+
+    Returns:
+        {"status": "deleted", "filename": "..."}
+
+    Raises:
+        HTTPException 400: Invalid filename (path traversal attempt)
+        HTTPException 404: File not found
+        HTTPException 500: Failed to delete file
+    """
+    # Path traversal防止: ファイル名にパスセパレータを禁止
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    file_path = Path(IMAGE_SAVE_DIR) / filename
+
+    # IMAGE_SAVE_DIR 外へのパストラバーサル防止
+    save_dir_real = os.path.realpath(IMAGE_SAVE_DIR) + os.sep
+    if not os.path.realpath(file_path).startswith(save_dir_real):
+        raise HTTPException(status_code=400, detail="Invalid filename")
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail=f"File not found: {filename}")
+
+    try:
+        file_path.unlink()
+        logger.info("[FILE-DELETE] deleted %s", file_path)
+        return {"status": "deleted", "filename": filename}
+    except OSError as exc:
+        raise HTTPException(status_code=500, detail=f"Failed to delete file: {exc}") from exc
 
 
 @app.post("/api/image-paste")
