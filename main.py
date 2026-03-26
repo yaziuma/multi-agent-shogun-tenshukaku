@@ -81,6 +81,9 @@ async def lifespan(app: FastAPI):
     app.state.settings = settings
     app.state.bakuhu_node = bakuhu_node
 
+    # Expose bakuhu_role as a Jinja2 global for all templates
+    templates.env.globals["bakuhu_role"] = settings.get("bakuhu", {}).get("role", "secondary")
+
     yield
 
     # Shutdown

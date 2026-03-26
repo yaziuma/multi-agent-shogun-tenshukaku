@@ -17,10 +17,34 @@
     <!-- Light theme for markdown (sengoku washi background) -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/github-markdown-css/5.5.1/github-markdown.min.css">
     <link rel="stylesheet" href="{{ base_path }}/static/style.css?v=20260221">
+    <style>
+    .bakuhu-role-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 3px 10px;
+        border-radius: 14px;
+        font-size: 12px;
+        font-weight: bold;
+        border: 1.5px solid;
+        white-space: nowrap;
+    }
+    .bakuhu-role-badge.primary {
+        background: rgba(255,215,60,0.2);
+        border-color: rgba(160,120,10,0.5);
+        color: #7a5500;
+    }
+    .bakuhu-role-badge.secondary {
+        background: rgba(100,140,200,0.15);
+        border-color: rgba(60,100,180,0.4);
+        color: #1a3a7a;
+    }
+    </style>
 </head>
 <body>
     <header>
         <h1>🏯 将軍パネル - Shogun Web Panel</h1>
+        <span class="bakuhu-role-badge {{ bakuhu_role }}">🏯 {% if bakuhu_role == 'primary' %}主幕府{% else %}従幕府{% endif %}</span>
     </header>
     <main>
         {% block content %}{% endblock %}
