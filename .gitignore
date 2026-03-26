@@ -1,4 +1,4 @@
-# shogun-web-v2 whitelist .gitignore
+# multi-agent-shogun-tenshukaku whitelist .gitignore
 # Deny all by default
 *
 
@@ -6,45 +6,73 @@
 !*/
 
 # Allow root config files
-!.gitignore
-!.gitattributes
-!.python-version
-!README.md
-!README_ja.md
-!main.py
-!pyproject.toml
-!start.sh
-!restart.sh
+!/.gitignore
+!/.gitattributes
+!/.python-version
+!/README.md
+!/README_ja.md
+!/main.py
+!/pyproject.toml
+!/start.sh
+!/restart.sh
 
-# Allow .github directory (CI/CD)
-!.github/
-!.github/**
+# Allow .github directory (explicit files only)
+!/.github/
+!/.github/workflows/
+!/.github/workflows/*.yml
+!/.github/workflows/*.yaml
+!/.github/ISSUE_TEMPLATE/
+!/.github/ISSUE_TEMPLATE/*.md
+!/.github/pull_request_template.md
 
-# Allow .claude directory and contents
-!.claude/
-!.claude/**
+# Allow .claude directory — explicit files only
+!/.claude/
+!/.claude/settings.json
+!/.claude/hooks/
+!/.claude/hooks/*.sh
+!/.claude/rules/
+!/.claude/rules/*.md
+!/.claude/rules/core/
+!/.claude/rules/core/*.md
+!/.claude/rules/paths/
+!/.claude/rules/paths/architecture/
+!/.claude/rules/paths/architecture/*.md
+!/.claude/rules/paths/core/
+!/.claude/rules/paths/core/*.md
+!/.claude/rules/paths/testing/
+!/.claude/rules/paths/testing/*.md
 
-# Allow assets directory (screenshots only)
-!assets/
-!assets/screenshots/
-!assets/screenshots/**
+# Allow assets (screenshots only)
+!/assets/
+!/assets/screenshots/
+!/assets/screenshots/**/*.png
 
-# Allow config directory (wildcard + deny dangerous patterns)
-!config/
-!config/settings.yaml.example
+# Allow config example only
+!/config/
+!/config/settings.yaml.example
 
-# Allow static directory
-!static/
-!static/**
+# Allow static assets (explicit types only)
+!/static/
+!/static/**/*.css
+!/static/**/*.js
+!/static/**/*.mjs
+!/static/**/*.png
+!/static/**/*.jpg
+!/static/**/*.jpeg
+!/static/**/*.svg
+!/static/**/*.ico
+!/static/**/*.webp
 
-# Allow templates directory
-!templates/
-!templates/**
+# Allow templates (HTML only)
+!/templates/
+!/templates/**/*.html
 
-# Allow tests directory
-!tests/
-!tests/**
+# Allow Python app package
+!/app/
+!/app/**/*.py
 
-# Allow ws (WebSocket) directory
-!ws/
-!ws/**
+# Allow tests
+!/tests/
+!/tests/**/*.py
+!/tests/screenshots/
+!/tests/screenshots/**/*.png
