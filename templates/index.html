@@ -448,6 +448,12 @@ function escapeHtml(text) {
     return div.innerHTML;
 }
 
+// URLスキーム検証関数（XSS対策: javascript:URL等を排除）
+function safeUrl(url) {
+    if (typeof url === 'string' && /^https?:\/\//i.test(url)) return url;
+    return '#';
+}
+
 // マーカーベースの色分け関数
 function colorizeOutput(text, color) {
     return text.split('\n').map(line => {
@@ -1541,7 +1547,7 @@ function renderPeerTable(peers) {
 
         let urlCell;
         if (p.status === 'online' && p.url) {
-            urlCell = '<a class="peer-link" href="' + escapeHtml(p.url) + '" target="_blank">' + escapeHtml(p.url) + ' 🔗</a>';
+            urlCell = '<a class="peer-link" href="' + safeUrl(p.url) + '" target="_blank">' + escapeHtml(p.url) + ' 🔗</a>';
         } else if (p.status === 'offline') {
             urlCell = '<span class="peer-link-offline">切断中</span>';
         } else {
