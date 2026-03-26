@@ -4,8 +4,8 @@ Unit tests for WebSocket core modules (PaneState and DashboardCache).
 
 import time
 
-from ws.dashboard_cache import DashboardCache
-from ws.state import PaneState
+from app.ws.dashboard_cache import DashboardCache
+from app.ws.state import PaneState
 
 
 class TestPaneState:

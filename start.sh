@@ -9,7 +9,7 @@ LOG_FILE="$LOG_DIR/shogun-web.log"
 # 設定ファイルパス（shogun-webリポジトリ内）
 CONFIG_FILE="$PROJECT_DIR/config/settings.yaml"
 
-echo "🚀 shogun-web-v2 起動スクリプト"
+echo "🚀 multi-agent-shogun-tenshukaku 起動スクリプト"
 echo "================================"
 
 # venv 存在チェック
@@ -65,7 +65,7 @@ if [ -n "$EXISTING_PID" ]; then
 
     # "uvicorn" OR "gunicorn" AND "main:app" が含まれるか確認
     if echo "$CMDLINE" | grep -qE "(uvicorn|gunicorn)" && echo "$CMDLINE" | grep -q "main:app"; then
-        echo "✓ shogun-web-v2プロセスと確認（gunicorn main:app）"
+        echo "✓ multi-agent-shogun-tenshukaku プロセスと確認（gunicorn main:app）"
         echo "プロセスを停止します..."
         echo "SIGTERM送信中..."
         kill -TERM $EXISTING_PID 2>/dev/null || true
@@ -87,7 +87,7 @@ if [ -n "$EXISTING_PID" ]; then
         echo "❌ ポート $PORT は別プロセスが使用中です:"
         echo "   PID: $EXISTING_PID"
         echo "   CMDLINE: $CMDLINE"
-        echo "   shogun-web-v2プロセスではないため、停止を中止します"
+        echo "   multi-agent-shogun-tenshukaku プロセスではないため、停止を中止します"
         exit 1
     fi
 else
@@ -98,8 +98,8 @@ fi
 echo "ポート解放を確認中..."
 sleep 1
 
-# shogun-web-v2起動
-echo "shogun-web-v2を起動中..."
+# multi-agent-shogun-tenshukaku起動
+echo "multi-agent-shogun-tenshukaku を起動中..."
 cd "$PROJECT_DIR"
 nohup uv run gunicorn main:app -w $WORKERS -k uvicorn.workers.UvicornWorker --bind $HOST:$PORT --pid "$PROJECT_DIR/gunicorn.pid" > "$LOG_FILE" 2>&1 &
 NEW_PID=$!
@@ -110,7 +110,7 @@ sleep 3
 # ヘルスチェック
 echo "ヘルスチェック中..."
 if curl -s http://localhost:$PORT > /dev/null 2>&1; then
-    echo "✅ shogun-web-v2が正常に起動しました！"
+    echo "✅ multi-agent-shogun-tenshukaku が正常に起動しました！"
     echo "📊 URL: http://$HOST:$PORT"
     echo "📝 ログ: $LOG_FILE"
     echo "🔢 PID: $NEW_PID"

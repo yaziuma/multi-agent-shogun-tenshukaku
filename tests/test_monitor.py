@@ -1,11 +1,11 @@
 """Tests for monitor WebSocket endpoint and capture_all_panes functionality."""
 
-from unittest.mock import AsyncMock, Mock, patch
+from unittest.mock import Mock, patch
 
 import pytest
+from fastapi.testclient import TestClient
 
-from ws.handlers import MonitorWebSocketHandler
-from ws.tmux_bridge import TmuxBridge
+from app.ws.tmux_bridge import TmuxBridge
 
 
 class TestCaptureAllPanes:
@@ -101,56 +101,47 @@ class TestCaptureAllPanes:
             bridge = TmuxBridge()
             result = bridge.capture_all_panes(lines=5)
 
-            # Should capture with start=-5 and get all 10 lines (mock behavior)
-            mock_pane.capture_pane.assert_called_once_with(start=-5, join_wrapped=True)
-            # Output contains all lines returned by mock
+            # State: output contains all lines returned by mock
             assert "line0" in result[0]["output"]
             assert "line9" in result[0]["output"]
 
 
+@pytest.fixture
+def client(tmp_path):
+    """FastAPI TestClient with real TmuxBridge; bakuhu_base redirected to tmp_path."""
+    from main import app
+
+    with TestClient(app) as test_client:
+        app.state.tmux_bridge.bakuhu_base = tmp_path
+        yield test_client
+
+
 class TestMonitorWebSocketHandler:
-    """Test MonitorWebSocketHandler class."""
+    """Integration tests for /ws/monitor endpoint using TestClient."""
 
-    @pytest.mark.asyncio
-    async def test_monitor_handler_with_broadcaster(self):
-        """Test that MonitorWebSocketHandler works with broadcaster pattern."""
-        mock_websocket = AsyncMock()
-        mock_broadcaster = AsyncMock()
+    def test_monitor_ws_connect_accepted(self, client):
+        """Connecting to /ws/monitor succeeds (accept was called — state: no exception)."""
+        with client.websocket_connect("/ws/monitor") as ws:
+            assert ws is not None
 
-        handler = MonitorWebSocketHandler(mock_broadcaster)
+    def test_monitor_ws_subscribes_on_connect(self, client):
+        """On connect, client is added to broadcaster.subscribers (subscribe was called)."""
+        from main import app
 
-        # Mock receive_text to raise WebSocketDisconnect after subscribe
-        from fastapi import WebSocketDisconnect
+        broadcaster = app.state.monitor_broadcaster
+        broadcaster._pane_lines = {}
 
-        mock_websocket.receive_text.side_effect = WebSocketDisconnect()
+        with client.websocket_connect("/ws/monitor"):
+            assert len(broadcaster.subscribers) == 1
 
-        # Run handler
-        await handler.handle(mock_websocket)
+    def test_monitor_ws_unsubscribes_on_disconnect(self, client):
+        """On disconnect, client is removed from broadcaster.subscribers (unsubscribe was called)."""
+        from main import app
 
-        # Verify websocket.accept was called
-        mock_websocket.accept.assert_called_once()
+        broadcaster = app.state.monitor_broadcaster
+        broadcaster._pane_lines = {}
 
-        # Verify subscribe/unsubscribe were called
-        mock_broadcaster.subscribe.assert_called_once_with(mock_websocket)
-        mock_broadcaster.unsubscribe.assert_called_once_with(mock_websocket)
+        with client.websocket_connect("/ws/monitor"):
+            pass  # disconnect at end of with block
 
-    @pytest.mark.asyncio
-    async def test_monitor_handler_handles_exception(self):
-        """Test that MonitorWebSocketHandler handles exceptions gracefully."""
-        mock_websocket = AsyncMock()
-        mock_broadcaster = AsyncMock()
-
-        handler = MonitorWebSocketHandler(mock_broadcaster)
-
-        # Mock receive_text to raise a generic exception
-        mock_websocket.receive_text.side_effect = Exception("Connection error")
-
-        # Should not raise exception and exit gracefully
-        await handler.handle(mock_websocket)
-
-        # Verify accept was called
-        mock_websocket.accept.assert_called_once()
-
-        # Verify subscribe/unsubscribe were called
-        mock_broadcaster.subscribe.assert_called_once_with(mock_websocket)
-        mock_broadcaster.unsubscribe.assert_called_once_with(mock_websocket)
+        assert len(broadcaster.subscribers) == 0

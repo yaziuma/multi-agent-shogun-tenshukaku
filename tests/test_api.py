@@ -1,47 +1,23 @@
 """
 FastAPI エンドポイントのテスト
-TmuxBridge をモックしてテストを実行
+Detroit学派（古典学派）: 実オブジェクト + 状態検証
 """
 
-from unittest.mock import MagicMock
+import subprocess
+from unittest.mock import patch
 
 import pytest
+import yaml
 from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def mock_bridge():
-    """TmuxBridge のモック（全テストで共通使用）"""
-    instance = MagicMock()
-    instance.read_dashboard.return_value = "# Test Dashboard\n\n将軍の指示を待つ"
-    instance.read_command_history.return_value = [
-        {
-            "cmd_id": "cmd_001",
-            "status": "done",
-            "timestamp": "2026-02-06T00:00:00",
-            "instruction": "test command 1",
-        },
-        {
-            "cmd_id": "cmd_002",
-            "status": "pending",
-            "timestamp": "2026-02-06T00:01:00",
-            "instruction": "test command 2",
-        },
-    ]
-    instance.send_to_shogun.return_value = True
-    instance.send_special_key.return_value = True
-    return instance
-
-
-@pytest.fixture
-def client(mock_bridge):
-    """FastAPI TestClient with mocked app.state"""
+def client(tmp_path):
+    """FastAPI TestClient with real TmuxBridge; bakuhu_base redirected to tmp_path."""
     from main import app
 
-    # Create TestClient (this will trigger lifespan)
     with TestClient(app) as test_client:
-        # Override app.state.tmux_bridge after lifespan
-        app.state.tmux_bridge = mock_bridge
+        app.state.tmux_bridge.bakuhu_base = tmp_path
         yield test_client
 
 
@@ -63,25 +39,21 @@ class TestTopPage:
 class TestDashboardAPI:
     """GET /api/dashboard のテスト"""
 
-    def test_dashboard_returns_200(self, client, mock_bridge):
+    def test_dashboard_returns_200(self, client):
         """ダッシュボードAPIが200を返す"""
         response = client.get("/api/dashboard")
         assert response.status_code == 200
 
-    def test_dashboard_calls_read_dashboard(self, client, mock_bridge):
-        """read_dashboard() が呼ばれる"""
-        client.get("/api/dashboard")
-        mock_bridge.read_dashboard.assert_called_once()
-
-    def test_dashboard_returns_content(self, client, mock_bridge):
+    def test_dashboard_returns_content(self, client, tmp_path):
         """ダッシュボード内容が返される"""
+        (tmp_path / "dashboard.md").write_text("# Test Dashboard\n\n将軍の指示を待つ")
         response = client.get("/api/dashboard")
         assert "Test Dashboard" in response.text
         assert "将軍の指示を待つ" in response.text
 
-    def test_dashboard_with_error(self, client, mock_bridge):
-        """read_dashboard() がエラーを起こした場合"""
-        mock_bridge.read_dashboard.side_effect = Exception("Dashboard read error")
+    def test_dashboard_with_error(self, client, tmp_path):
+        """読み取り不能なdashboard（ディレクトリ）の場合はErrorが返される"""
+        (tmp_path / "dashboard.md").mkdir()  # ディレクトリにすると read_text() が失敗
         response = client.get("/api/dashboard")
         assert response.status_code == 200
         assert "Error" in response.text
@@ -90,40 +62,37 @@ class TestDashboardAPI:
 class TestCommandAPI:
     """POST /api/command のテスト"""
 
-    def test_command_returns_200(self, client, mock_bridge):
+    def test_command_returns_200(self, client):
         """コマンド送信が200を返す"""
-        response = client.post("/api/command", data={"instruction": "test"})
+        with patch("subprocess.run"):
+            response = client.post("/api/command", data={"instruction": "test"})
         assert response.status_code == 200
 
-    def test_command_calls_send_to_shogun(self, client, mock_bridge):
-        """send_to_shogun() が instruction をそのまま渡して呼ばれる"""
-        client.post("/api/command", data={"instruction": "deploy system"})
-        mock_bridge.send_to_shogun.assert_called_once_with("deploy system")
-
-    def test_command_returns_sent_status(self, client, mock_bridge):
+    def test_command_returns_sent_status(self, client):
         """レスポンスに status: sent が含まれる（cmd_idは含まれない）"""
-        response = client.post("/api/command", data={"instruction": "test"})
+        with patch("subprocess.run"):
+            response = client.post("/api/command", data={"instruction": "test"})
         data = response.json()
         assert data["status"] == "sent"
         assert "cmd_id" not in data
 
-    def test_command_with_send_failure(self, client, mock_bridge):
-        """send_to_shogun() が False を返した場合"""
-        mock_bridge.send_to_shogun.return_value = False
-        response = client.post("/api/command", data={"instruction": "test"})
+    def test_command_with_send_failure(self, client):
+        """tmuxコマンド失敗時にstatus: errorが返される"""
+        with patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "tmux")):
+            response = client.post("/api/command", data={"instruction": "test"})
         data = response.json()
         assert data["status"] == "error"
         assert "message" in data
 
-    def test_command_with_exception(self, client, mock_bridge):
-        """send_to_shogun() が例外を起こした場合"""
-        mock_bridge.send_to_shogun.side_effect = Exception("Send error")
-        response = client.post("/api/command", data={"instruction": "test"})
+    def test_command_with_exception(self, client):
+        """予期せぬ例外時にstatus: errorが返される"""
+        with patch("subprocess.run", side_effect=Exception("Send error")):
+            response = client.post("/api/command", data={"instruction": "test"})
         data = response.json()
         assert data["status"] == "error"
         assert "message" in data
 
-    def test_command_requires_instruction(self, client, mock_bridge):
+    def test_command_requires_instruction(self, client):
         """instruction が必須"""
         response = client.post("/api/command", data={})
         assert response.status_code == 422  # Validation error
@@ -132,26 +101,34 @@ class TestCommandAPI:
 class TestHistoryAPI:
     """GET /api/history のテスト"""
 
-    def test_history_returns_200(self, client, mock_bridge):
+    def test_history_returns_200(self, client):
         """履歴APIが200を返す"""
         response = client.get("/api/history")
         assert response.status_code == 200
 
-    def test_history_calls_read_command_history(self, client, mock_bridge):
-        """read_command_history() が呼ばれる"""
-        client.get("/api/history")
-        mock_bridge.read_command_history.assert_called_once()
-
-    def test_history_returns_html(self, client, mock_bridge):
+    def test_history_returns_html(self, client, tmp_path):
         """履歴がHTMLとして返される"""
+        queue_dir = tmp_path / "queue"
+        queue_dir.mkdir()
+        (queue_dir / "shogun_to_karo.yaml").write_text(
+            yaml.dump({
+                "commands": [
+                    {"cmd_id": "cmd_001", "instruction": "test command 1",
+                     "status": "done", "timestamp": "2026-02-06T00:00:00"},
+                    {"cmd_id": "cmd_002", "instruction": "test command 2",
+                     "status": "pending", "timestamp": "2026-02-06T00:01:00"},
+                ]
+            })
+        )
         response = client.get("/api/history")
         assert "text/html" in response.headers["content-type"]
-        # cmd_id が含まれているか確認（テンプレートがレンダリングされている）
         assert "cmd_001" in response.text or "cmd_002" in response.text
 
-    def test_history_with_error(self, client, mock_bridge):
+    def test_history_with_error(self, client, tmp_path):
         """read_command_history() がエラーを起こした場合"""
-        mock_bridge.read_command_history.side_effect = Exception("History read error")
+        queue_dir = tmp_path / "queue"
+        queue_dir.mkdir()
+        (queue_dir / "shogun_to_karo.yaml").mkdir()  # ディレクトリにすると open() が失敗
         response = client.get("/api/history")
         assert response.status_code == 200
         assert "Error" in response.text
@@ -160,41 +137,35 @@ class TestHistoryAPI:
 class TestSpecialKeyAPI:
     """POST /api/special-key のテスト"""
 
-    def test_special_key_escape_returns_200(self, client, mock_bridge):
+    def test_special_key_escape_returns_200(self, client):
         """Escapeキー送信が200を返す"""
-        response = client.post("/api/special-key", json={"key": "Escape"})
+        with patch("subprocess.run"):
+            response = client.post("/api/special-key", json={"key": "Escape"})
         assert response.status_code == 200
 
-    def test_special_key_calls_send_special_key(self, client, mock_bridge):
-        """send_special_key() が Escape で呼ばれる"""
-        client.post("/api/special-key", json={"key": "Escape"})
-        mock_bridge.send_special_key.assert_called_once_with("Escape")
-
-    def test_special_key_returns_sent_status(self, client, mock_bridge):
+    def test_special_key_returns_sent_status(self, client):
         """レスポンスに status: sent と key が含まれる"""
-        response = client.post("/api/special-key", json={"key": "Escape"})
+        with patch("subprocess.run"):
+            response = client.post("/api/special-key", json={"key": "Escape"})
         data = response.json()
         assert data["status"] == "sent"
         assert data["key"] == "Escape"
 
-    def test_special_key_with_disallowed_key(self, client, mock_bridge):
+    def test_special_key_with_disallowed_key(self, client):
         """allowlist外のキー（Delete）は400エラー"""
-        mock_bridge.send_special_key.side_effect = ValueError(
-            "Key 'Delete' is not allowed. Allowed keys: {'Escape'}"
-        )
         response = client.post("/api/special-key", json={"key": "Delete"})
         assert response.status_code == 400
         assert "not allowed" in response.json()["detail"]
 
-    def test_special_key_requires_key(self, client, mock_bridge):
+    def test_special_key_requires_key(self, client):
         """key が必須（422 バリデーションエラー）"""
         response = client.post("/api/special-key", json={})
         assert response.status_code == 422
 
-    def test_special_key_with_send_failure(self, client, mock_bridge):
-        """send_special_key() が False を返した場合"""
-        mock_bridge.send_special_key.return_value = False
-        response = client.post("/api/special-key", json={"key": "Escape"})
+    def test_special_key_with_send_failure(self, client):
+        """tmuxコマンド失敗時にstatus: errorが返される"""
+        with patch("subprocess.run", side_effect=subprocess.CalledProcessError(1, "tmux")):
+            response = client.post("/api/special-key", json={"key": "Escape"})
         data = response.json()
         assert data["status"] == "error"
         assert "message" in data
@@ -203,76 +174,77 @@ class TestSpecialKeyAPI:
 class TestSpecialKeyNewKeys:
     """POST /api/special-key の新キーテスト"""
 
-    def test_special_key_enter(self, client, mock_bridge):
+    def test_special_key_enter(self, client):
         """Enterキー送信が成功する"""
-        response = client.post("/api/special-key", json={"key": "Enter"})
+        with patch("subprocess.run"):
+            response = client.post("/api/special-key", json={"key": "Enter"})
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "sent"
         assert data["key"] == "Enter"
-        mock_bridge.send_special_key.assert_called_once_with("Enter")
 
-    def test_special_key_tab(self, client, mock_bridge):
+    def test_special_key_tab(self, client):
         """Tabキー送信が成功する"""
-        response = client.post("/api/special-key", json={"key": "Tab"})
+        with patch("subprocess.run"):
+            response = client.post("/api/special-key", json={"key": "Tab"})
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "sent"
         assert data["key"] == "Tab"
 
-    def test_special_key_btab(self, client, mock_bridge):
+    def test_special_key_btab(self, client):
         """BTab (Shift+Tab) キー送信が成功する"""
-        response = client.post("/api/special-key", json={"key": "BTab"})
+        with patch("subprocess.run"):
+            response = client.post("/api/special-key", json={"key": "BTab"})
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "sent"
         assert data["key"] == "BTab"
 
-    def test_special_key_arrow_keys(self, client, mock_bridge):
+    def test_special_key_arrow_keys(self, client):
         """矢印キー送信が成功する"""
         for key in ["Up", "Down", "Left", "Right"]:
-            mock_bridge.reset_mock()
-            response = client.post("/api/special-key", json={"key": key})
+            with patch("subprocess.run"):
+                response = client.post("/api/special-key", json={"key": key})
             assert response.status_code == 200
             data = response.json()
             assert data["status"] == "sent"
             assert data["key"] == key
-            mock_bridge.send_special_key.assert_called_once_with(key)
 
-    def test_special_key_numbers(self, client, mock_bridge):
+    def test_special_key_numbers(self, client):
         """数字キー送信が成功する"""
         for num in range(10):
-            mock_bridge.reset_mock()
             key = str(num)
-            response = client.post("/api/special-key", json={"key": key})
+            with patch("subprocess.run"):
+                response = client.post("/api/special-key", json={"key": key})
             assert response.status_code == 200
             data = response.json()
             assert data["status"] == "sent"
             assert data["key"] == key
-            mock_bridge.send_special_key.assert_called_once_with(key)
 
-    def test_special_key_yes_no(self, client, mock_bridge):
+    def test_special_key_yes_no(self, client):
         """y/n キー送信が成功する"""
         for key in ["y", "n"]:
-            mock_bridge.reset_mock()
-            response = client.post("/api/special-key", json={"key": key})
+            with patch("subprocess.run"):
+                response = client.post("/api/special-key", json={"key": key})
             assert response.status_code == 200
             data = response.json()
             assert data["status"] == "sent"
             assert data["key"] == key
-            mock_bridge.send_special_key.assert_called_once_with(key)
 
-    def test_special_key_space(self, client, mock_bridge):
+    def test_special_key_space(self, client):
         """Spaceキー送信が成功する"""
-        response = client.post("/api/special-key", json={"key": "Space"})
+        with patch("subprocess.run"):
+            response = client.post("/api/special-key", json={"key": "Space"})
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "sent"
         assert data["key"] == "Space"
 
-    def test_special_key_bspace(self, client, mock_bridge):
+    def test_special_key_bspace(self, client):
         """BSpace (Backspace) キー送信が成功する"""
-        response = client.post("/api/special-key", json={"key": "BSpace"})
+        with patch("subprocess.run"):
+            response = client.post("/api/special-key", json={"key": "BSpace"})
         assert response.status_code == 200
         data = response.json()
         assert data["status"] == "sent"

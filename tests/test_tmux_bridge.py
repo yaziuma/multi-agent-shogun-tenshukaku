@@ -10,7 +10,7 @@ from unittest.mock import Mock, mock_open, patch
 import pytest
 import yaml
 
-from ws.tmux_bridge import TmuxBridge
+from app.ws.tmux_bridge import TmuxBridge
 
 
 @pytest.fixture
@@ -45,7 +45,7 @@ def bridge_instance(mock_tmux_server, mock_settings, tmp_path):
     """
     with patch("libtmux.Server", return_value=mock_tmux_server):
         with patch("builtins.open", mock_open(read_data=yaml.dump(mock_settings))):
-            from ws.tmux_bridge import TmuxBridge
+            from app.ws.tmux_bridge import TmuxBridge
 
             bridge = TmuxBridge()
             # Override bakuhu_base to use tmp_path
@@ -251,7 +251,7 @@ def test_tmux_settings_from_config(mock_tmux_server, tmp_path):
     }
     with patch("libtmux.Server", return_value=mock_tmux_server):
         with patch("builtins.open", mock_open(read_data=yaml.dump(settings_content))):
-            from ws.tmux_bridge import TmuxBridge
+            from app.ws.tmux_bridge import TmuxBridge
 
             bridge = TmuxBridge()
 
@@ -267,7 +267,7 @@ def test_tmux_settings_defaults_when_missing(mock_tmux_server, tmp_path):
     }
     with patch("libtmux.Server", return_value=mock_tmux_server):
         with patch("builtins.open", mock_open(read_data=yaml.dump(settings_content))):
-            from ws.tmux_bridge import TmuxBridge
+            from app.ws.tmux_bridge import TmuxBridge
 
             bridge = TmuxBridge()
 

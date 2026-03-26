@@ -5,7 +5,7 @@ Tests that the sanitize function correctly removes ANSI escape sequences,
 rule lines (──, ━, etc.), and trailing blank lines.
 """
 
-from ws.tmux_bridge import sanitize_pane_text
+from app.ws.tmux_bridge import sanitize_pane_text
 
 
 class TestSanitizePaneText:

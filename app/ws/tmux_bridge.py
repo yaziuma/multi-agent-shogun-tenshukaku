@@ -101,7 +101,7 @@ class TmuxBridge:
     def __init__(self):
         """Initialize the tmux bridge and connect to the multiagent session."""
         self.server = libtmux.Server()
-        settings_path = Path(__file__).parent.parent / "config" / "settings.yaml"
+        settings_path = Path(__file__).parent.parent.parent / "config" / "settings.yaml"
         with open(settings_path) as f:
             settings = yaml.safe_load(f)
         self.bakuhu_base = Path(settings["bakuhu"]["base_path"])

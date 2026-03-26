@@ -21,10 +21,12 @@ from fastapi.templating import Jinja2Templates
 from markupsafe import escape
 from pydantic import BaseModel
 
-from ws.broadcasters import AdaptivePoller, MonitorBroadcaster, ShogunBroadcaster
-from ws.handlers import MonitorWebSocketHandler, WebSocketHandler
-from ws.runtime import TmuxRuntime
-from ws.tmux_bridge import TmuxBridge
+from app.bakuhu.bakuhu_node import BakuhuNode
+from app.bakuhu.bakuhu_routes import router as bakuhu_router
+from app.ws.broadcasters import AdaptivePoller, MonitorBroadcaster, ShogunBroadcaster
+from app.ws.handlers import MonitorWebSocketHandler, WebSocketHandler
+from app.ws.runtime import TmuxRuntime
+from app.ws.tmux_bridge import TmuxBridge
 
 
 @asynccontextmanager
@@ -67,12 +69,17 @@ async def lifespan(app: FastAPI):
     await monitor_broadcaster.start()
     await shogun_broadcaster.start()
 
+    # Start BakuhuNode
+    bakuhu_node = BakuhuNode(settings=settings)
+    await bakuhu_node.start()
+
     # Store in app.state for access in handlers/APIs
     app.state.tmux_bridge = tmux_bridge
     app.state.runtime = runtime
     app.state.monitor_broadcaster = monitor_broadcaster
     app.state.shogun_broadcaster = shogun_broadcaster
     app.state.settings = settings
+    app.state.bakuhu_node = bakuhu_node
 
     yield
 
@@ -80,12 +87,14 @@ async def lifespan(app: FastAPI):
     cleanup_task.cancel()
     await monitor_broadcaster.stop()
     await shogun_broadcaster.stop()
+    await bakuhu_node.stop()
     runtime.shutdown()
 
 
 app = FastAPI(title="Shogun Web Panel", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory="static"), name="static")
 templates = Jinja2Templates(directory="templates")
+app.include_router(bakuhu_router)
 
 
 @app.get("/", response_class=HTMLResponse)

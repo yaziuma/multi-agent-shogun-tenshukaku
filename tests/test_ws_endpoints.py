@@ -1,35 +1,20 @@
 """
 WebSocket エンドポイントの接続テスト
+Detroit学派（古典学派）: 実オブジェクト + 状態検証
 /ws と /ws/monitor のWebSocket接続確認
 """
-
-from unittest.mock import MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
 
 
 @pytest.fixture
-def mock_bridge():
-    """TmuxBridge のモック"""
-    instance = MagicMock()
-    instance.read_dashboard.return_value = "# Test Dashboard"
-    instance.read_command_history.return_value = []
-    instance.capture_shogun_pane.return_value = "test output"
-    instance.capture_all_panes.return_value = [
-        {"agent_id": "karo", "output": "karo output"},
-        {"agent_id": "ashigaru1", "output": "ashigaru1 output"},
-    ]
-    return instance
-
-
-@pytest.fixture
-def client(mock_bridge):
-    """FastAPI TestClient with mocked app.state"""
+def client(tmp_path):
+    """FastAPI TestClient with real TmuxBridge; bakuhu_base redirected to tmp_path."""
     from main import app
 
     with TestClient(app) as test_client:
-        app.state.tmux_bridge = mock_bridge
+        app.state.tmux_bridge.bakuhu_base = tmp_path
         yield test_client
 
 

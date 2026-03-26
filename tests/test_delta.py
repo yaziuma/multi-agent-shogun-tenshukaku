@@ -1,6 +1,6 @@
 """Tests for ws/delta.py delta computation."""
 
-from ws.delta import compute_delta
+from app.ws.delta import compute_delta
 
 
 class TestComputeDelta:
