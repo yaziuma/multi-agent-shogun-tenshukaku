@@ -8,6 +8,7 @@
         <button type="button" class="tab-btn" data-tab="monitor" hx-disable>監視</button>
         <button type="button" class="tab-btn" data-tab="dashboard" hx-disable>戦況</button>
         <button type="button" class="tab-btn" data-tab="history" hx-disable>履歴</button>
+        <button type="button" class="tab-btn" data-tab="bakuhu" hx-disable>幕府</button>
         <a href="{{ base_path }}/settings" class="tab-settings-link" hx-disable>⚙️</a>
     </nav>
 
@@ -167,6 +168,37 @@
         </section>
     </div>
 
+    <!-- タブ5: 幕府 -->
+    <div class="tab-content" id="tab-bakuhu">
+        <section class="bakuhu-section">
+            <h2>🏯 幕府間連携</h2>
+            <p class="section-desc">
+                peer状態: GET /bakuhu/peers（30秒キャッシュ）で取得。
+                接続状態はRPC WS接続の有無で判定（healthzポーリングではない）。
+            </p>
+
+            <div class="peer-list-header">
+                <h3>接続済みPeer一覧</h3>
+                <button class="peer-refresh-btn" id="peer-refresh-btn">🔄 更新</button>
+                <span class="peer-count" id="peer-count"></span>
+            </div>
+
+            <table class="peer-table">
+                <thead>
+                    <tr>
+                        <th>Peer ID</th>
+                        <th>名称</th>
+                        <th>接続状態</th>
+                        <th>Base URL</th>
+                    </tr>
+                </thead>
+                <tbody id="peer-table-body">
+                    <tr><td colspan="4" style="text-align:center; color:#9a6030; padding:16px;">読み込み中...</td></tr>
+                </tbody>
+            </table>
+        </section>
+    </div>
+
 
 </div>
 
@@ -282,6 +314,97 @@
 .clear-monitor-btn:hover {
     background: rgba(255,100,100,0.2);
     border-color: rgba(255,100,100,0.5);
+}
+
+/* 幕府タブ */
+.bakuhu-section {
+    margin-bottom: 20px;
+}
+.bakuhu-section .section-desc {
+    font-size: 12px;
+    color: #9a6030;
+    margin-bottom: 10px;
+}
+.bakuhu-section h2 {
+    font-size: 15px;
+    font-weight: bold;
+    color: #7a4419;
+    margin-bottom: 10px;
+    padding-bottom: 4px;
+    border-bottom: 1px solid rgba(120,70,25,0.2);
+}
+.peer-list-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 8px;
+}
+.peer-list-header h3 {
+    font-size: 13px;
+    font-weight: bold;
+    color: #7a4419;
+}
+.peer-refresh-btn {
+    padding: 3px 10px;
+    font-size: 12px;
+    font-family: monospace;
+    cursor: pointer;
+    border-radius: 4px;
+    border: 1px solid rgba(120,70,25,0.4);
+    background: rgba(255,255,255,0.6);
+    color: #7a4419;
+}
+.peer-count {
+    font-size: 12px;
+    color: #9a6030;
+    margin-left: auto;
+}
+.peer-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.peer-table th {
+    text-align: left;
+    padding: 6px 10px;
+    background: rgba(120,70,25,0.1);
+    border-bottom: 2px solid rgba(120,70,25,0.3);
+    color: #7a4419;
+    font-weight: bold;
+}
+.peer-table td {
+    padding: 7px 10px;
+    border-bottom: 1px solid rgba(120,70,25,0.15);
+    vertical-align: middle;
+}
+.peer-table tr:hover td {
+    background: rgba(120,70,25,0.05);
+}
+.status-dot {
+    display: inline-block;
+    width: 9px;
+    height: 9px;
+    border-radius: 50%;
+    margin-right: 5px;
+    vertical-align: middle;
+}
+.status-dot.online  { background: #2a9a40; }
+.status-dot.offline { background: #cc3030; }
+.status-dot.unknown { background: #aaa; }
+.status-label { vertical-align: middle; }
+.peer-link {
+    color: #7a4419;
+    text-decoration: underline;
+    font-family: monospace;
+}
+.peer-link:hover { color: #4a2000; }
+.peer-link-offline {
+    color: #aaa;
+    font-style: italic;
+}
+.peer-link-unknown {
+    color: #bbb;
+    font-style: italic;
 }
 </style>
 
@@ -1392,6 +1515,77 @@ document.addEventListener('paste', function(e) {
         };
         input.click();
     });
+})();
+
+// ===========================================================
+// 幕府タブ: peer一覧取得
+// ===========================================================
+
+function renderPeerTable(peers) {
+    const tbody = document.getElementById('peer-table-body');
+    const countEl = document.getElementById('peer-count');
+    if (!tbody) return;
+
+    if (!peers || peers.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#9a6030; padding:16px;">Peerなし</td></tr>';
+        if (countEl) countEl.textContent = '0 peer';
+        return;
+    }
+
+    const onlineCount = peers.filter(p => p.status === 'online').length;
+    if (countEl) countEl.textContent = peers.length + ' peer / オンライン ' + onlineCount;
+
+    tbody.innerHTML = peers.map(p => {
+        const statusClass = p.status === 'online' ? 'online' : (p.status === 'offline' ? 'offline' : 'unknown');
+        const statusLabel = p.status === 'online' ? 'online' : (p.status === 'offline' ? 'offline' : 'unknown');
+
+        let urlCell;
+        if (p.status === 'online' && p.url) {
+            urlCell = '<a class="peer-link" href="' + escapeHtml(p.url) + '" target="_blank">' + escapeHtml(p.url) + ' 🔗</a>';
+        } else if (p.status === 'offline') {
+            urlCell = '<span class="peer-link-offline">切断中</span>';
+        } else {
+            urlCell = '<span class="peer-link-unknown">不明</span>';
+        }
+
+        return '<tr>' +
+            '<td><code>' + escapeHtml(p.peer_id || '') + '</code></td>' +
+            '<td>' + escapeHtml(p.name || p.peer_id || '') + '</td>' +
+            '<td><span class="status-dot ' + statusClass + '"></span><span class="status-label">' + statusLabel + '</span></td>' +
+            '<td>' + urlCell + '</td>' +
+            '</tr>';
+    }).join('');
+}
+
+function fetchPeers() {
+    fetch('{{ base_path }}/bakuhu/peers')
+        .then(res => res.json())
+        .then(data => renderPeerTable(data.peers || []))
+        .catch(err => {
+            const tbody = document.getElementById('peer-table-body');
+            if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#cc3030; padding:16px;">取得エラー: ' + escapeHtml(String(err)) + '</td></tr>';
+        });
+}
+
+(function() {
+    // 幕府タブ表示時に自動取得
+    let bakuhuInitialLoaded = false;
+    document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.addEventListener('click', () => {
+            if (btn.dataset.tab === 'bakuhu') {
+                if (!bakuhuInitialLoaded) {
+                    bakuhuInitialLoaded = true;
+                    fetchPeers();
+                }
+            }
+        });
+    });
+
+    // 更新ボタン
+    const refreshBtn = document.getElementById('peer-refresh-btn');
+    if (refreshBtn) {
+        refreshBtn.addEventListener('click', fetchPeers);
+    }
 })();
 
 // ドラッグ&ドロップ: フォーム枠に近づいた時のみオーバーレイ表示
