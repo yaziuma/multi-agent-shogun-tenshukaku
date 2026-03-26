@@ -9,7 +9,7 @@ import logging
 import os
 import re
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +24,7 @@ BAKUHU_EVENTS_TOPIC = "bakuhu.events"
 MAX_NORMAL_DELAY = 60.0
 MAX_AUTH_DELAY = 300.0
 DEDUP_TTL_SECONDS = 60
+PEERS_CACHE_TTL = 30.0  # 設計書 L363: /bakuhu/peers キャッシュTTL
 
 
 class AuthConfigError(Exception):
@@ -42,7 +43,9 @@ def _load_accepted_tokens(settings: dict) -> dict[str, str]:
 
     # 環境変数上書き: BAKUHU_ACCEPTED_TOKENS_<KEY>=<peer_id>
     env_prefix = "BAKUHU_ACCEPTED_TOKENS_"
-    env_tokens: dict[str, tuple[str, str]] = {}  # normalized_key -> (orig_token, peer_id)
+    env_tokens: dict[
+        str, tuple[str, str]
+    ] = {}  # normalized_key -> (orig_token, peer_id)
 
     for orig_token, peer_id in list(tokens.items()):
         norm = re.sub(r"[^A-Z0-9]", "_", str(orig_token).upper())
@@ -61,7 +64,7 @@ def _load_accepted_tokens(settings: dict) -> dict[str, str]:
 
     for key, value in os.environ.items():
         if key.startswith(env_prefix):
-            suffix = key[len(env_prefix):]
+            suffix = key[len(env_prefix) :]
             # 環境変数から対応するtokenを探す
             if suffix in env_tokens:
                 orig_token, _ = env_tokens[suffix]
@@ -77,7 +80,7 @@ def _load_accepted_tokens(settings: dict) -> dict[str, str]:
 class BakuhuRpcClientMethods(RpcMethodsBase):
     """Primary側がsecondaryから受け取るcallbackメソッド群"""
 
-    def __init__(self, node: "BakuhuNode"):
+    def __init__(self, node: BakuhuNode):
         super().__init__()
         self._node = node
 
@@ -93,7 +96,11 @@ class BakuhuRpcClientMethods(RpcMethodsBase):
         """委任結果の返却 (secondary → primary callback)"""
         # バリデーション
         if not request_id or not status:
-            logger.warning("[push_result] missing required fields: request_id=%s status=%s", request_id, status)
+            logger.warning(
+                "[push_result] missing required fields: request_id=%s status=%s",
+                request_id,
+                status,
+            )
             return {"accepted": False, "reason": "missing_required_fields"}
 
         valid_statuses = {"succeeded", "failed", "expired", "canceled"}
@@ -108,23 +115,33 @@ class BakuhuRpcClientMethods(RpcMethodsBase):
             return {"accepted": False, "reason": "duplicate"}
 
         # primary inboxに永続化
-        self._node._persist_to_inbox("shogun", {
-            "type": "bakuhu_result",
-            "request_id": request_id,
-            "from_bakuhu": from_bakuhu,
-            "summary": summary,
-            "status": status,
-            "artifact_path": artifact_path,
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        self._node._persist_to_inbox(
+            "shogun",
+            {
+                "type": "bakuhu_result",
+                "request_id": request_id,
+                "from_bakuhu": from_bakuhu,
+                "summary": summary,
+                "status": status,
+                "artifact_path": artifact_path,
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+        )
 
-        audit_logger.info(json.dumps({
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "peer_id": from_bakuhu,
-            "action": "push_result",
-            "result": "accepted",
-            "request_id": request_id,
-        }))
+        # 完了済みとしてマーク（後続の push_status を無視するため）
+        self._node.mark_completed(request_id)
+
+        audit_logger.info(
+            json.dumps(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "peer_id": from_bakuhu,
+                    "action": "push_result",
+                    "result": "accepted",
+                    "request_id": request_id,
+                }
+            )
+        )
 
         return {"accepted": True, "request_id": request_id}
 
@@ -139,7 +156,9 @@ class BakuhuRpcClientMethods(RpcMethodsBase):
         """状態変更の中間通知 (secondary → primary callback)"""
         valid_statuses = {"validated", "queued", "in_progress"}
         if not request_id or status not in valid_statuses:
-            logger.warning("[push_status] invalid: request_id=%s status=%s", request_id, status)
+            logger.warning(
+                "[push_status] invalid: request_id=%s status=%s", request_id, status
+            )
             return {"accepted": False, "reason": "invalid_status"}
 
         # 重複排除
@@ -149,23 +168,30 @@ class BakuhuRpcClientMethods(RpcMethodsBase):
 
         # 完了済みの場合は警告
         if self._node.is_completed(request_id):
-            audit_logger.warning(json.dumps({
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "peer_id": from_bakuhu,
-                "action": "push_status_after_complete",
-                "result": "ignored",
-                "request_id": request_id,
-            }))
+            audit_logger.warning(
+                json.dumps(
+                    {
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "peer_id": from_bakuhu,
+                        "action": "push_status_after_complete",
+                        "result": "ignored",
+                        "request_id": request_id,
+                    }
+                )
+            )
             return {"accepted": False, "reason": "already_completed"}
 
-        self._node._persist_to_inbox("shogun", {
-            "type": "bakuhu_status",
-            "request_id": request_id,
-            "from_bakuhu": from_bakuhu,
-            "status": status,
-            "progress": progress or {},
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-        })
+        self._node._persist_to_inbox(
+            "shogun",
+            {
+                "type": "bakuhu_status",
+                "request_id": request_id,
+                "from_bakuhu": from_bakuhu,
+                "status": status,
+                "progress": progress or {},
+                "timestamp": datetime.now(UTC).isoformat(),
+            },
+        )
 
         return {"accepted": True}
 
@@ -173,7 +199,7 @@ class BakuhuRpcClientMethods(RpcMethodsBase):
 class BakuhuRpcServerMethods(RpcMethodsBase):
     """Secondary側が公開するメソッド群（primaryが呼び出す）"""
 
-    def __init__(self, node: "BakuhuNode"):
+    def __init__(self, node: BakuhuNode):
         super().__init__()
         self._node = node
 
@@ -186,6 +212,10 @@ class BakuhuRpcServerMethods(RpcMethodsBase):
         **kwargs: Any,
     ) -> dict:
         """委任依頼の受付"""
+        # channelを保存（push_result再送時に使用）
+        if self.channel is not None:
+            self._node._incoming_channels[from_bakuhu] = self.channel
+
         # バリデーション
         if not request_id or not content or not from_bakuhu:
             return {"accepted": False, "reason": "missing_required_fields"}
@@ -194,48 +224,57 @@ class BakuhuRpcServerMethods(RpcMethodsBase):
         if priority not in valid_priorities:
             return {"accepted": False, "reason": f"invalid_priority: {priority}"}
 
-        # peer_id制限: primaryからのみ
-        cfg = self._node._settings.get("bakuhu", {})
-        accepted = dict(cfg.get("accepted_tokens") or {})
-        peer_id = accepted.get(from_bakuhu, "")
-        # submit_delegationはprimary peer_idからのみ（ここではfrom_bakuhuがトークンでなく名前として来る想定）
-        # 実際には接続時のトークンで認証済みのため、ここではbasic check
+        # TODO(TC-AUTH-07): submit_delegationはprimary peer_idからのみ受付すべき
+        # 現在の実装では認可チェック未実装（設計書 L379 の要件が未達）
+        # 実際には接続時のトークンで認証済みだが、ロールマッピングが設定仕様にないため
+        # peer_id レベルの制限は将来実装とする
 
         # 冪等性チェック（flock + 複合キー）
         idempotency_key = f"{from_bakuhu}:{request_id}"
-        inbox_path = self._node._inbox_path("shogun")
 
         try:
-            result = self._node._atomic_write_inbox("shogun", idempotency_key, {
-                "type": "bakuhu_delegation",
-                "request_id": request_id,
-                "from_bakuhu": from_bakuhu,
-                "content": content,
-                "priority": priority,
-                "read": False,
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-            })
+            result = self._node._atomic_write_inbox(
+                "shogun",
+                idempotency_key,
+                {
+                    "type": "bakuhu_delegation",
+                    "request_id": request_id,
+                    "from_bakuhu": from_bakuhu,
+                    "content": content,
+                    "priority": priority,
+                    "read": False,
+                    "timestamp": datetime.now(UTC).isoformat(),
+                },
+            )
         except Exception as exc:
             logger.error("[submit_delegation] inbox write error: %s", exc)
             return {"accepted": False, "reason": "internal_error"}
 
         if not result:
-            audit_logger.info(json.dumps({
-                "timestamp": datetime.now(timezone.utc).isoformat(),
-                "peer_id": from_bakuhu,
-                "action": "submit_delegation",
-                "result": "duplicate",
-                "request_id": request_id,
-            }))
+            audit_logger.info(
+                json.dumps(
+                    {
+                        "timestamp": datetime.now(UTC).isoformat(),
+                        "peer_id": from_bakuhu,
+                        "action": "submit_delegation",
+                        "result": "duplicate",
+                        "request_id": request_id,
+                    }
+                )
+            )
             return {"accepted": False, "reason": "duplicate"}
 
-        audit_logger.info(json.dumps({
-            "timestamp": datetime.now(timezone.utc).isoformat(),
-            "peer_id": from_bakuhu,
-            "action": "submit_delegation",
-            "result": "accepted",
-            "request_id": request_id,
-        }))
+        audit_logger.info(
+            json.dumps(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "peer_id": from_bakuhu,
+                    "action": "submit_delegation",
+                    "result": "accepted",
+                    "request_id": request_id,
+                }
+            )
+        )
 
         return {"accepted": True, "request_id": request_id, "status": "received"}
 
@@ -266,6 +305,14 @@ class BakuhuNode:
         self._completed: set[str] = set()
         # 再送キュー処理タスク
         self._retry_task: asyncio.Task | None = None
+        # /bakuhu/peers キャッシュ（TTL 30秒: 設計書 L363）
+        self._peers_cache_time: float = 0.0
+        self._peers_cache_data: list[dict] = []
+
+        # peer_id -> WebSocketRpcClient（接続中のみ格納）
+        self._rpc_clients: dict[str, Any] = {}
+        # from_bakuhu (peer_id) -> incoming RPC channel（secondaryがcallbackに使用）
+        self._incoming_channels: dict[str, Any] = {}
 
         # accepted_tokensをロード（起動時衝突チェック）
         self._accepted_tokens = _load_accepted_tokens(settings)
@@ -287,7 +334,11 @@ class BakuhuNode:
                     continue
                 ev = asyncio.Event()
                 self._peer_shutdowns[peer_id] = ev
-                self._peer_status[peer_id] = {"rpc": False, "pubsub": False, "last_seen": 0.0}
+                self._peer_status[peer_id] = {
+                    "rpc": False,
+                    "pubsub": False,
+                    "last_seen": 0.0,
+                }
 
                 t1 = asyncio.create_task(self.maintain_rpc_client(peer_id, peer, ev))
                 t2 = asyncio.create_task(self.maintain_pubsub_client(peer_id, peer, ev))
@@ -340,11 +391,15 @@ class BakuhuNode:
                     keep_alive=20,
                     open_timeout=3,
                 ) as client:
+                    self._rpc_clients[peer_id] = client
                     self._peer_status[peer_id]["rpc"] = True
                     self._peer_status[peer_id]["last_seen"] = time.monotonic()
                     delay = 2.0  # 接続成功でリセット
                     logger.info("[RPC] connected to peer=%s", peer_id)
-                    await client.wait_on_reader()
+                    try:
+                        await client.wait_on_reader()
+                    finally:
+                        self._rpc_clients.pop(peer_id, None)
             except asyncio.CancelledError:
                 return
             except Exception as exc:
@@ -407,25 +462,30 @@ class BakuhuNode:
         instruction: str,
         request_id: str | None = None,
         priority: str = "normal",
-    ) -> str:
+    ) -> dict:
         """primaryからsecondaryへ委任依頼（RPC呼び出し）"""
-        if not request_id:
-            from datetime import datetime
-            request_id = f"req_{datetime.now(timezone.utc).strftime('%Y%m%dT%H%M%S')}_{peer_id}"
-
+        client = self._rpc_clients.get(peer_id)
+        if client is None:
+            raise RuntimeError(f"peer {peer_id!r} not connected")
         cfg = self._settings.get("bakuhu", {})
-        name = cfg.get("name", "primary")
-
-        # Phase-1未実装: channel参照が必要なため後のPhaseで実装予定
-        # 設計書protocol_v2.md Phase-1の範囲外
-        # TODO: 実際のRPCクライアントからcallする（接続済みchannelが必要）
-        raise NotImplementedError("delegate requires established RPC channel")
+        my_name = cfg.get("name", "primary-bakuhu")
+        if not request_id:
+            request_id = f"req_{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}_{peer_id}"
+        result = await client.other.submit_delegation(
+            request_id=request_id,
+            content=instruction,
+            from_bakuhu=my_name,
+            priority=priority,
+        )
+        return result
 
     # ------------------------------------------------------------------ #
     # PubSubイベント受信
     # ------------------------------------------------------------------ #
 
-    async def _on_event(self, data: dict | str, topic: str = BAKUHU_EVENTS_TOPIC) -> None:
+    async def _on_event(
+        self, data: dict | str, topic: str = BAKUHU_EVENTS_TOPIC
+    ) -> None:
         """PubSubイベント受信ハンドラ"""
         if isinstance(data, str):
             try:
@@ -454,30 +514,64 @@ class BakuhuNode:
         while not self._shutdown.is_set():
             try:
                 await asyncio.sleep(10)
-                self._flush_retry_queue()
+                await self._flush_retry_queue()
             except asyncio.CancelledError:
                 return
             except Exception as exc:
                 logger.warning("[RetryQueue] error: %s", exc)
 
-    def _flush_retry_queue(self) -> None:
-        """再送キューから送信を試みる（同期・簡易実装）"""
+    async def _flush_retry_queue(self) -> None:
+        """再送キューから送信を試みる"""
         pending_path = self._pending_results_path()
         if not pending_path.exists():
             return
 
-        with open(pending_path) as f:
-            data = yaml.safe_load(f) or {}
+        # Read under flock（enqueue_push_result と同じ a+ パターン）
+        with open(pending_path, "a+") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                f.seek(0)
+                data = yaml.safe_load(f) or {}
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
 
         pending = data.get("pending", [])
         if not pending:
             return
 
-        # Phase-1未実装: channel参照が必要。現在はキューへの永続化のみ実施。
-        # 設計書protocol_v2.mdの再送キュー仕様との乖離: 排出処理はPhase-2で実装予定
-        # 再送処理（実際のRPC接続が必要なため、ここでは永続化のみ確認）
-        # 接続済みchannelを通じた再送はmaintain_rpc_clientで行う
-        logger.debug("[RetryQueue] %d items pending", len(pending))
+        remaining = []
+        for item in pending:
+            from_bakuhu = item.get("from_bakuhu", "")
+            channel = self._incoming_channels.get(from_bakuhu)
+            if channel is None:
+                remaining.append(item)
+                continue
+            # 冪等チェック
+            idem_key = f"{from_bakuhu}:{item.get('request_id')}:{item.get('status')}"
+            if self.is_duplicate(idem_key):
+                continue  # 既送信 → 削除対象
+            try:
+                await channel.other.push_result(
+                    request_id=item.get("request_id", ""),
+                    summary=item.get("summary", ""),
+                    status=item.get("status", ""),
+                    artifact_path=item.get("artifact_path", ""),
+                    from_bakuhu=from_bakuhu,
+                )
+                logger.info("[RetryQueue] re-sent: %s", idem_key)
+            except Exception as exc:
+                logger.warning("[RetryQueue] retry failed: %s: %s", idem_key, exc)
+                remaining.append(item)
+
+        # pending_results.yaml を更新（flock使用: enqueue_push_result と同パターン）
+        with open(pending_path, "a+") as f:
+            fcntl.flock(f, fcntl.LOCK_EX)
+            try:
+                f.seek(0)
+                f.truncate()
+                yaml.safe_dump({"pending": remaining}, f)
+            finally:
+                fcntl.flock(f, fcntl.LOCK_UN)
 
     def enqueue_push_result(self, payload: dict) -> None:
         """push_result失敗時にローカル永続キューへ積む"""
@@ -538,7 +632,11 @@ class BakuhuNode:
         return any(s.get("rpc") for s in self._peer_status.values())
 
     def get_peer_statuses(self) -> list[dict]:
-        """peer状態一覧を返す"""
+        """peer状態一覧を返す（TTL 30秒キャッシュ: 設計書 L363）"""
+        now = time.monotonic()
+        if now - self._peers_cache_time < PEERS_CACHE_TTL and self._peers_cache_data:
+            return list(self._peers_cache_data)
+
         cfg = self._settings.get("bakuhu", {})
         peers = cfg.get("peers") or []
         result = []
@@ -546,20 +644,31 @@ class BakuhuNode:
             peer_id = peer.get("id", "")
             status = self._peer_status.get(peer_id, {})
             rpc_ok = status.get("rpc", False)
-            result.append({
-                "id": peer_id,
-                "name": peer.get("name", peer_id),
-                "base_url": peer.get("base_url", ""),
-                "status": "online" if rpc_ok else "offline",
-                "rpc_connected": rpc_ok,
-                "pubsub_connected": status.get("pubsub", False),
-            })
+            result.append(
+                {
+                    "id": peer_id,
+                    "name": peer.get("name", peer_id),
+                    "base_url": peer.get("base_url", ""),
+                    "status": "online" if rpc_ok else "offline",
+                    "rpc_connected": rpc_ok,
+                    "pubsub_connected": status.get("pubsub", False),
+                }
+            )
+        self._peers_cache_time = now
+        self._peers_cache_data = list(result)
         return result
+
+    def invalidate_peers_cache(self) -> None:
+        """peers キャッシュを明示的に無効化する（状態変化時に呼ぶ）"""
+        self._peers_cache_time = 0.0
+        self._peers_cache_data = []
 
     def _is_auth_error(self, exc: Exception) -> bool:
         """認証/設定系エラーか判定"""
         msg = str(exc).lower()
-        return any(kw in msg for kw in ["401", "403", "unauthorized", "forbidden", "auth"])
+        return any(
+            kw in msg for kw in ["401", "403", "unauthorized", "forbidden", "auth"]
+        )
 
     # ------------------------------------------------------------------ #
     # 永続化
@@ -597,7 +706,9 @@ class BakuhuNode:
             finally:
                 fcntl.flock(f, fcntl.LOCK_UN)
 
-    def _atomic_write_inbox(self, agent: str, idempotency_key: str, entry: dict) -> bool:
+    def _atomic_write_inbox(
+        self, agent: str, idempotency_key: str, entry: dict
+    ) -> bool:
         """flockによる原子的inbox書き込み。重複時はFalseを返す。"""
         inbox_path = self._inbox_path(agent)
         inbox_path.parent.mkdir(parents=True, exist_ok=True)
