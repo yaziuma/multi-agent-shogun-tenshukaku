@@ -1546,8 +1546,8 @@ function renderPeerTable(peers) {
         const statusLabel = p.status === 'online' ? 'online' : (p.status === 'offline' ? 'offline' : 'unknown');
 
         let urlCell;
-        if (p.status === 'online' && p.url) {
-            urlCell = '<a class="peer-link" href="' + safeUrl(p.url) + '" target="_blank">' + escapeHtml(p.url) + ' 🔗</a>';
+        if (p.status === 'online' && p.base_url) {
+            urlCell = '<a class="peer-link" href="' + safeUrl(p.base_url) + '" target="_blank">' + escapeHtml(p.base_url) + ' 🔗</a>';
         } else if (p.status === 'offline') {
             urlCell = '<span class="peer-link-offline">切断中</span>';
         } else {
