@@ -193,7 +193,7 @@
                     </tr>
                 </thead>
                 <tbody id="peer-table-body">
-                    <tr><td colspan="4" style="text-align:center; color:#9a6030; padding:16px;">読み込み中...</td></tr>
+                    <tr><td colspan="4" style="text-align:center; color:rgba(243,234,211,0.6); padding:16px;">読み込み中...</td></tr>
                 </tbody>
             </table>
         </section>
@@ -322,16 +322,16 @@
 }
 .bakuhu-section .section-desc {
     font-size: 12px;
-    color: #9a6030;
+    color: rgba(243,234,211,0.7);
     margin-bottom: 10px;
 }
 .bakuhu-section h2 {
     font-size: 15px;
     font-weight: bold;
-    color: #7a4419;
+    color: #f3ead3;
     margin-bottom: 10px;
     padding-bottom: 4px;
-    border-bottom: 1px solid rgba(120,70,25,0.2);
+    border-bottom: 1px solid rgba(243,234,211,0.3);
 }
 .peer-list-header {
     display: flex;
@@ -342,7 +342,7 @@
 .peer-list-header h3 {
     font-size: 13px;
     font-weight: bold;
-    color: #7a4419;
+    color: #f3ead3;
 }
 .peer-refresh-btn {
     padding: 3px 10px;
@@ -350,13 +350,13 @@
     font-family: monospace;
     cursor: pointer;
     border-radius: 4px;
-    border: 1px solid rgba(120,70,25,0.4);
-    background: rgba(255,255,255,0.6);
-    color: #7a4419;
+    border: 1px solid rgba(243,234,211,0.35);
+    background: rgba(255,255,255,0.12);
+    color: #f3ead3;
 }
 .peer-count {
     font-size: 12px;
-    color: #9a6030;
+    color: rgba(243,234,211,0.7);
     margin-left: auto;
 }
 .peer-table {
@@ -367,18 +367,19 @@
 .peer-table th {
     text-align: left;
     padding: 6px 10px;
-    background: rgba(120,70,25,0.1);
-    border-bottom: 2px solid rgba(120,70,25,0.3);
-    color: #7a4419;
+    background: rgba(255,255,255,0.08);
+    border-bottom: 2px solid rgba(243,234,211,0.3);
+    color: #f3ead3;
     font-weight: bold;
 }
 .peer-table td {
     padding: 7px 10px;
-    border-bottom: 1px solid rgba(120,70,25,0.15);
+    border-bottom: 1px solid rgba(243,234,211,0.15);
     vertical-align: middle;
+    color: #e9e2d2;
 }
 .peer-table tr:hover td {
-    background: rgba(120,70,25,0.05);
+    background: rgba(255,255,255,0.06);
 }
 .status-dot {
     display: inline-block;
@@ -393,17 +394,17 @@
 .status-dot.unknown { background: #aaa; }
 .status-label { vertical-align: middle; }
 .peer-link {
-    color: #7a4419;
+    color: #f3ead3;
     text-decoration: underline;
     font-family: monospace;
 }
-.peer-link:hover { color: #4a2000; }
+.peer-link:hover { color: #fff; }
 .peer-link-offline {
-    color: #aaa;
+    color: rgba(243,234,211,0.5);
     font-style: italic;
 }
 .peer-link-unknown {
-    color: #bbb;
+    color: rgba(243,234,211,0.4);
     font-style: italic;
 }
 </style>
@@ -1533,7 +1534,7 @@ function renderPeerTable(peers) {
     if (!tbody) return;
 
     if (!peers || peers.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#9a6030; padding:16px;">Peerなし</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:rgba(243,234,211,0.6); padding:16px;">Peerなし</td></tr>';
         if (countEl) countEl.textContent = '0 peer';
         return;
     }
@@ -1564,13 +1565,38 @@ function renderPeerTable(peers) {
 }
 
 function fetchPeers() {
-    fetch('{{ base_path }}/bakuhu/peers')
-        .then(res => res.json())
+    return fetch('{{ base_path }}/bakuhu/peers')
+        .then(res => {
+            if (!res.ok) throw new Error('HTTP ' + res.status);
+            return res.json();
+        })
         .then(data => renderPeerTable(data.peers || []))
         .catch(err => {
             const tbody = document.getElementById('peer-table-body');
-            if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#cc3030; padding:16px;">取得エラー: ' + escapeHtml(String(err)) + '</td></tr>';
+            if (tbody) tbody.innerHTML = '<tr><td colspan="4" style="text-align:center; color:#ff8080; padding:16px;">取得エラー: ' + escapeHtml(String(err)) + '</td></tr>';
+            throw err;
         });
+}
+
+// 自動ポーリング（1分間隔・指数バックオフ）
+const POLL_BASE_INTERVAL = 60000;   // 1分
+const POLL_MAX_INTERVAL = 960000;   // 最大16分
+let pollInterval = POLL_BASE_INTERVAL;
+let pollTimer = null;
+
+function schedulePoll() {
+    if (pollTimer) clearTimeout(pollTimer);
+    pollTimer = setTimeout(autoPoll, pollInterval);
+}
+
+async function autoPoll() {
+    try {
+        await fetchPeers();
+        pollInterval = POLL_BASE_INTERVAL;
+    } catch (e) {
+        pollInterval = Math.min(pollInterval * 2, POLL_MAX_INTERVAL);
+    }
+    schedulePoll();
 }
 
 (function() {
@@ -1581,7 +1607,8 @@ function fetchPeers() {
             if (btn.dataset.tab === 'bakuhu') {
                 if (!bakuhuInitialLoaded) {
                     bakuhuInitialLoaded = true;
-                    fetchPeers();
+                    fetchPeers().catch(() => {});
+                    schedulePoll();
                 }
             }
         });
@@ -1590,7 +1617,7 @@ function fetchPeers() {
     // 更新ボタン
     const refreshBtn = document.getElementById('peer-refresh-btn');
     if (refreshBtn) {
-        refreshBtn.addEventListener('click', fetchPeers);
+        refreshBtn.addEventListener('click', () => fetchPeers().catch(() => {}));
     }
 })();
 
