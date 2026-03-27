@@ -211,6 +211,45 @@ async def bakuhu_peers(request: Request, token: str = Query(default="")):
 
 
 # ------------------------------------------------------------------ #
+# 委任
+# ------------------------------------------------------------------ #
+
+
+class DelegateBody(BaseModel):
+    peer_id: str
+    instruction: str
+    request_id: str | None = None
+    priority: str = "normal"
+
+
+@router.post("/delegate")
+async def bakuhu_delegate(
+    request: Request,
+    body: DelegateBody,
+    token: str = Query(default=""),
+):
+    """委任依頼をpeerに送信（primaryのみ）"""
+    node = _get_node(request)
+    if not token:
+        raise HTTPException(status_code=403, detail="missing token")
+    if _authenticate_token(token, node._accepted_tokens) is None:
+        raise HTTPException(status_code=403, detail="invalid token")
+
+    try:
+        result = await node.delegate(
+            peer_id=body.peer_id,
+            instruction=body.instruction,
+            request_id=body.request_id,
+            priority=body.priority,
+        )
+        return {"ok": True, "result": result}
+    except RuntimeError as e:
+        raise HTTPException(status_code=404, detail=str(e))
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+# ------------------------------------------------------------------ #
 # ファイル転送
 # ------------------------------------------------------------------ #
 
@@ -253,7 +292,13 @@ async def bakuhu_files(
 
     # upload_dir取得
     cfg = settings.get("bakuhu", {})
-    base_path = Path(cfg.get("base_path", "/home/quieter/projects/multi-agent-bakuhu"))
+    _base = cfg.get("base_path")
+    if not _base:
+        raise HTTPException(
+            status_code=500,
+            detail="bakuhu.base_path is not configured in settings.yaml",
+        )
+    base_path = Path(_base)
     upload_dir_rel = cfg.get("upload_dir", "queue/cross_bakuhu/files")
     upload_dir = base_path / upload_dir_rel
     upload_dir.mkdir(parents=True, exist_ok=True)

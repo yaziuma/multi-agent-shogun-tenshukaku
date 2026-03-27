@@ -726,15 +726,21 @@ class BakuhuNode:
     # 永続化
     # ------------------------------------------------------------------ #
 
-    def _inbox_path(self, agent: str) -> Path:
+    def _get_base_path(self) -> Path:
         cfg = self._settings.get("bakuhu", {})
-        base = Path(cfg.get("base_path", "/home/quieter/projects/multi-agent-bakuhu"))
-        return base / "queue" / "inbox" / f"{agent}.yaml"
+        _base = cfg.get("base_path")
+        if not _base:
+            raise ValueError(
+                "bakuhu.base_path is required in settings.yaml "
+                "(absolute path to the multi-agent-bakuhu repository)"
+            )
+        return Path(_base)
+
+    def _inbox_path(self, agent: str) -> Path:
+        return self._get_base_path() / "queue" / "inbox" / f"{agent}.yaml"
 
     def _pending_results_path(self) -> Path:
-        cfg = self._settings.get("bakuhu", {})
-        base = Path(cfg.get("base_path", "/home/quieter/projects/multi-agent-bakuhu"))
-        return base / "queue" / "cross_bakuhu" / "pending_results.yaml"
+        return self._get_base_path() / "queue" / "cross_bakuhu" / "pending_results.yaml"
 
     def _persist_to_inbox(self, agent: str, entry: dict) -> None:
         """inboxに非原子的書き込み（push_result/push_status用）"""
