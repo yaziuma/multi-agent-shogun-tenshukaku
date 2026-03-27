@@ -278,6 +278,19 @@ class BakuhuRpcServerMethods(RpcMethodsBase):
 
         return {"accepted": True, "request_id": request_id, "status": "received"}
 
+    async def register_peer(
+        self,
+        from_bakuhu: str = "",
+        base_url: str = "",
+        **kwargs: Any,
+    ) -> dict:
+        """primary接続確立時の通知（primaryが呼ぶ）。incoming_channelsに登録する。"""
+        if from_bakuhu and self.channel is not None:
+            self._node._incoming_channels[from_bakuhu] = self.channel
+            self._node.invalidate_peers_cache()
+            logger.info("[RPC] registered incoming peer: %s (base_url=%s)", from_bakuhu, base_url)
+        return {"registered": bool(from_bakuhu)}
+
     async def get_bakuhu_info(self, **kwargs: Any) -> dict:
         """幕府の状態情報取得"""
         cfg = self._node._settings.get("bakuhu", {})
@@ -396,6 +409,14 @@ class BakuhuNode:
                     self._peer_status[peer_id]["last_seen"] = time.monotonic()
                     delay = 2.0  # 接続成功でリセット
                     logger.info("[RPC] connected to peer=%s", peer_id)
+                    # secondaryにpeer登録通知（secondary側でincoming_channelsに登録させる）
+                    _my_cfg = self._settings.get("bakuhu", {})
+                    _my_name = _my_cfg.get("name", "")
+                    if _my_name:
+                        try:
+                            await client.other.register_peer(from_bakuhu=_my_name, base_url=base_url)
+                        except Exception as _e:
+                            logger.warning("[RPC] register_peer failed for peer=%s: %s", peer_id, _e)
                     try:
                         await client.wait_on_reader()
                     finally:
@@ -639,11 +660,17 @@ class BakuhuNode:
 
         cfg = self._settings.get("bakuhu", {})
         peers = cfg.get("peers") or []
+        role = cfg.get("role", "secondary")  # ループ前に移動
         result = []
         for peer in peers:
             peer_id = peer.get("id", "")
             status = self._peer_status.get(peer_id, {})
             rpc_ok = status.get("rpc", False)
+            # secondary roleの場合: _incoming_channelsにactive channelがあればonline
+            if not rpc_ok and role != "primary":
+                inc_channel = self._incoming_channels.get(peer_id)
+                if inc_channel is not None and not inc_channel.isClosed():
+                    rpc_ok = True
             result.append(
                 {
                     "id": peer_id,
@@ -656,7 +683,7 @@ class BakuhuNode:
             )
         # secondary向け: incoming_rpc_channelsに登録されたprimary接続も表示
         # （設計書 protocol_v2.md L454: SNodeはincoming_rpc_channelsにchannelを登録）
-        role = cfg.get("role", "secondary")
+        # ※ roleは上で定義済み
         if role != "primary":
             existing_ids = {r["id"] for r in result}
             stale_keys = []

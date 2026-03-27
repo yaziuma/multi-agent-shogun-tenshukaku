@@ -1419,3 +1419,175 @@ class TestWebSocketRealConnection:
             assert result_msg["status"] == "succeeded"
         finally:
             await node.stop()
+
+    async def test_tc_rpc_register_01_incoming_channel_registered_on_connect(
+        self, tmp_path, secondary_server
+    ):
+        """TC-RPC-REGISTER-01: primaryがRPC接続確立時にsecondaryのincoming_channelsに登録される
+
+        検証内容:
+        - primaryがsecondaryに接続し maintain_rpc_client() が register_peer() を呼ぶ
+        - secondary._incoming_channels["primary-bakuhu"] が登録される
+        - secondary の get_peer_statuses() で primary-bakuhu が online で返る
+        """
+        base_url, port, sec_settings, sec_app = secondary_server
+
+        prim_path = tmp_path / "primary"
+        prim_path.mkdir(parents=True, exist_ok=True)
+        prim_settings = _make_primary_settings(prim_path, secondary_base_url=base_url)
+
+        prim_app = make_app(prim_settings)
+        node = prim_app.state.bakuhu_node
+        await node.start()
+
+        try:
+            # RPC接続確立 + register_peer() 完了を待つ（最大3秒）
+            sec_node = sec_app.state.bakuhu_node
+            for _ in range(30):
+                await asyncio.sleep(0.1)
+                if (
+                    node._peer_status.get("secondary-a", {}).get("rpc")
+                    and "primary-bakuhu" in sec_node._incoming_channels
+                ):
+                    break
+
+            # primary側: RPC接続済みであることを確認
+            assert node._peer_status.get("secondary-a", {}).get("rpc") is True, (
+                "primary should have established RPC connection to secondary"
+            )
+
+            # TC-RPC-REGISTER-01: secondary側のincoming_channelsにprimaryが登録されている
+            assert "primary-bakuhu" in sec_node._incoming_channels, (
+                "secondary should have registered primary-bakuhu in incoming_channels "
+                "after maintain_rpc_client() called register_peer()"
+            )
+
+            # secondary の get_peer_statuses() で primary-bakuhu が online になる
+            sec_node.invalidate_peers_cache()
+            async with AsyncClient(
+                transport=ASGITransport(app=sec_app), base_url="http://test"
+            ) as client:
+                # secondary の accepted_tokens には "token-primary" が登録されている
+                resp = await client.get(
+                    "/bakuhu/peers?token=token-primary"
+                )
+
+            assert resp.status_code == 200
+            peers = resp.json()["peers"]
+            primary_peer = next(
+                (p for p in peers if p["id"] == "primary-bakuhu"), None
+            )
+            assert primary_peer is not None, (
+                "secondary /bakuhu/peers should list primary-bakuhu"
+            )
+            assert primary_peer["status"] == "online", (
+                f"primary-bakuhu should be online on secondary, got: {primary_peer['status']}"
+            )
+        finally:
+            await node.stop()
+
+    async def test_tc_rpc_register_02_configured_peer_online_via_incoming_channel(
+        self, tmp_path
+    ):
+        """TC-RPC-REGISTER-02: secondaryのpeersにprimary-bakuhuが設定済みの場合もonlineになる
+
+        検証内容:
+        - secondaryのsettings.yamlにpeers: [{id: primary-bakuhu, ...}] が設定されている
+        - primaryがRPC接続を確立しregister_peer()を呼ぶ
+        - secondary.get_peer_statuses() でprimary-bakuhuがonlineで返る（configured peer経由）
+        - 旧コードではrpc_ok=Falseのまま→offline、修正後はincoming_channels確認でonline
+        """
+        import uvicorn
+
+        port = _find_free_port()
+        sec_path = tmp_path / "secondary"
+        sec_path.mkdir(parents=True, exist_ok=True)
+
+        # secondary: primary-bakuhu をconfigured peersに含む設定
+        sec_settings = {
+            "bakuhu": {
+                "base_path": str(sec_path),
+                "role": "secondary",
+                "name": "secondary-bakuhu",
+                "outbound_token": "token-secondary-outbound",
+                "accepted_tokens": {
+                    "token-primary": "primary-bakuhu",
+                },
+                "upload_dir": "cross_bakuhu/files",
+                "peers": [
+                    {
+                        "id": "primary-bakuhu",
+                        "name": "primary-bakuhu",
+                        "base_url": "",
+                    }
+                ],
+            }
+        }
+        sec_app = make_app(sec_settings)
+
+        config = uvicorn.Config(sec_app, host="127.0.0.1", port=port, log_level="error")
+        server = uvicorn.Server(config)
+        task = asyncio.create_task(server.serve())
+
+        # サーバ起動を確認（最大5秒）
+        for _ in range(50):
+            await asyncio.sleep(0.1)
+            try:
+                s = _socket_module.create_connection(("127.0.0.1", port), timeout=0.1)
+                s.close()
+                break
+            except (ConnectionRefusedError, TimeoutError, OSError):
+                continue
+
+        base_url = f"http://127.0.0.1:{port}"
+        prim_path = tmp_path / "primary"
+        prim_path.mkdir(parents=True, exist_ok=True)
+        prim_settings = _make_primary_settings(prim_path, secondary_base_url=base_url)
+
+        prim_app = make_app(prim_settings)
+        node = prim_app.state.bakuhu_node
+        await node.start()
+
+        try:
+            sec_node = sec_app.state.bakuhu_node
+            # RPC接続確立 + register_peer() 完了を待つ（最大3秒）
+            for _ in range(30):
+                await asyncio.sleep(0.1)
+                if (
+                    node._peer_status.get("secondary-a", {}).get("rpc")
+                    and "primary-bakuhu" in sec_node._incoming_channels
+                ):
+                    break
+
+            # TC-RPC-REGISTER-02: secondary側のincoming_channelsにprimaryが登録されている
+            assert "primary-bakuhu" in sec_node._incoming_channels, (
+                "secondary should have registered primary-bakuhu in incoming_channels"
+            )
+
+            # configured peer経由でonlineになることを確認
+            sec_node.invalidate_peers_cache()
+            async with AsyncClient(
+                transport=ASGITransport(app=sec_app), base_url="http://test"
+            ) as client:
+                resp = await client.get("/bakuhu/peers?token=token-primary")
+
+            assert resp.status_code == 200
+            peers = resp.json()["peers"]
+            primary_peer = next(
+                (p for p in peers if p["id"] == "primary-bakuhu"), None
+            )
+            assert primary_peer is not None, (
+                "secondary /bakuhu/peers should list primary-bakuhu (configured peer)"
+            )
+            assert primary_peer["status"] == "online", (
+                f"primary-bakuhu should be online via incoming_channels check, got: {primary_peer['status']}"
+            )
+        finally:
+            await node.stop()
+            server.should_exit = True
+            await asyncio.sleep(0.2)
+            task.cancel()
+            try:
+                await task
+            except (asyncio.CancelledError, Exception):
+                pass
