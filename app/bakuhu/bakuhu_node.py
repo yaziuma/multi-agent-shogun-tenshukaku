@@ -755,7 +755,7 @@ class BakuhuNode:
                     data = yaml.safe_load(f) or {}
                 except yaml.YAMLError:
                     data = {}
-                messages = data.get("messages", [])
+                messages = data.get("messages") or []
                 messages.append(entry)
                 data["messages"] = messages
                 f.seek(0)
@@ -780,7 +780,7 @@ class BakuhuNode:
                 except yaml.YAMLError:
                     data = {}
 
-                messages = data.get("messages", [])
+                messages = data.get("messages") or []
 
                 # 複合キー重複チェック
                 for msg in messages:

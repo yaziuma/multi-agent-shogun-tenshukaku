@@ -235,6 +235,12 @@ async def bakuhu_delegate(
     if _authenticate_token(token, node._accepted_tokens) is None:
         raise HTTPException(status_code=403, detail="invalid token")
 
+    settings = request.app.state.settings
+    cfg = settings.get("bakuhu", {})
+    role = cfg.get("role", "secondary")
+    if role == "secondary":
+        raise HTTPException(status_code=403, detail="secondary cannot call delegate")
+
     try:
         result = await node.delegate(
             peer_id=body.peer_id,

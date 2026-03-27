@@ -1684,3 +1684,111 @@ class TestWebSocketRealConnection:
         assert sec_node._peer_status.get("primary-bakuhu", {}).get("pubsub", True) is False, (
             "secondary should reset primary-bakuhu pubsub=False after disconnect (try/finally)"
         )
+
+
+# ------------------------------------------------------------------ #
+# TC-DELEGATE-HTTP-01: POST /bakuhu/delegate HTTPエンドポイントテスト
+# ------------------------------------------------------------------ #
+
+
+class TestDelegateHTTP:
+    @pytest.mark.asyncio
+    async def test_delegate_http_calls_node_delegate(self, tmp_path):
+        """TC-DELEGATE-HTTP-01: POST /bakuhu/delegate が node.delegate() を呼ぶ"""
+        settings = make_settings(tmp_path)
+        app = make_app(settings)
+        node = app.state.bakuhu_node
+
+        mock_result = {"accepted": True, "request_id": "req_test"}
+        node.delegate = AsyncMock(return_value=mock_result)
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/bakuhu/delegate?token=token-secondary-a",
+                json={
+                    "peer_id": "secondary-a",
+                    "instruction": "テスト委任",
+                    "priority": "normal",
+                },
+            )
+
+        assert response.status_code == 200
+        body = response.json()
+        assert body["ok"] is True
+        assert body["result"] == mock_result
+        node.delegate.assert_called_once_with(
+            peer_id="secondary-a",
+            instruction="テスト委任",
+            request_id=None,
+            priority="normal",
+        )
+
+    @pytest.mark.asyncio
+    async def test_delegate_http_no_token_returns_403(self, tmp_path):
+        """TC-DELEGATE-HTTP-01: token なしで 403"""
+        settings = make_settings(tmp_path)
+        app = make_app(settings)
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/bakuhu/delegate",
+                json={"peer_id": "secondary-a", "instruction": "テスト"},
+            )
+
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_delegate_http_invalid_token_returns_403(self, tmp_path):
+        """TC-DELEGATE-HTTP-01: 無効token で 403"""
+        settings = make_settings(tmp_path)
+        app = make_app(settings)
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/bakuhu/delegate?token=invalid",
+                json={"peer_id": "secondary-a", "instruction": "テスト"},
+            )
+
+        assert response.status_code == 403
+
+    @pytest.mark.asyncio
+    async def test_delegate_http_peer_not_connected_returns_404(self, tmp_path):
+        """TC-DELEGATE-HTTP-01: peer未接続（RuntimeError）で 404"""
+        settings = make_settings(tmp_path)
+        app = make_app(settings)
+        node = app.state.bakuhu_node
+
+        node.delegate = AsyncMock(side_effect=RuntimeError("peer 'secondary-a' not connected"))
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/bakuhu/delegate?token=token-secondary-a",
+                json={"peer_id": "secondary-a", "instruction": "テスト"},
+            )
+
+        assert response.status_code == 404
+
+    @pytest.mark.asyncio
+    async def test_delegate_http_secondary_role_returns_403(self, tmp_path):
+        """TC-DELEGATE-HTTP-05: secondary role で 403"""
+        settings = make_settings(tmp_path, role="secondary")
+        app = make_app(settings)
+
+        async with AsyncClient(
+            transport=ASGITransport(app=app), base_url="http://test"
+        ) as client:
+            response = await client.post(
+                "/bakuhu/delegate?token=token-secondary-a",
+                json={"peer_id": "secondary-a", "instruction": "テスト"},
+            )
+
+        assert response.status_code == 403
+        assert "secondary cannot call delegate" in response.json()["detail"]
