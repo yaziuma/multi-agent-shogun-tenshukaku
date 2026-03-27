@@ -385,5 +385,15 @@ async def bakuhu_ws_pubsub(websocket: WebSocket, token: str = Query(default=""))
         )
     )
 
+    # PubSub接続確立: secondary側でpeer_statusのpubsubフラグを更新
+    node._peer_status.setdefault(peer_id, {})["pubsub"] = True
+    node.invalidate_peers_cache()
+    logger.info("[PubSub] incoming peer connected: %s", peer_id)
+
     endpoint = _get_pubsub_endpoint(websocket)
-    await endpoint.main_loop(websocket)
+    try:
+        await endpoint.main_loop(websocket)
+    finally:
+        node._peer_status.setdefault(peer_id, {})["pubsub"] = False
+        node.invalidate_peers_cache()
+        logger.info("[PubSub] incoming peer disconnected: %s", peer_id)

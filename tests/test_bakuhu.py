@@ -1628,3 +1628,59 @@ class TestWebSocketRealConnection:
             )
         finally:
             await node.stop()
+
+    async def test_tc_pubsub_status_01_pubsub_connected_flag(self, tmp_path, secondary_server):
+        """TC-PUBSUB-STATUS-01: primaryがsecondaryのPubSubエンドポイントに接続したとき
+        secondary.get_peer_statuses()でpubsub_connected:trueを確認し、
+        切断後にpubsub_connected:falseに戻ることを確認する。
+
+        検証内容:
+        - primary node.start() → secondary /bakuhu/ws/pubsub に接続
+        - secondary._peer_status["primary-bakuhu"]["pubsub"] = True になる
+        - secondary.get_peer_statuses()["pubsub_connected"] == True
+        - primary node.stop() → finally ブロックでフラグが False にリセットされる
+        - secondary.get_peer_statuses()["pubsub_connected"] == False
+        """
+        base_url, port, sec_settings, sec_app = secondary_server
+        sec_node = sec_app.state.bakuhu_node
+
+        prim_path = tmp_path / "primary"
+        prim_path.mkdir(parents=True, exist_ok=True)
+        prim_settings = _make_primary_settings(prim_path, secondary_base_url=base_url)
+
+        prim_app = make_app(prim_settings)
+        node = prim_app.state.bakuhu_node
+        await node.start()
+
+        try:
+            # RPC + PubSub 接続完了を待つ（最大3秒）
+            for _ in range(30):
+                await asyncio.sleep(0.1)
+                if sec_node._peer_status.get("primary-bakuhu", {}).get("pubsub"):
+                    break
+
+            # TC-PUBSUB-STATUS-01: secondary._peer_status に pubsub フラグが立っている
+            assert sec_node._peer_status.get("primary-bakuhu", {}).get("pubsub") is True, (
+                "secondary should mark primary-bakuhu pubsub=True after incoming pubsub connection"
+            )
+
+            # secondary.get_peer_statuses() で pubsub_connected:True を確認
+            sec_node.invalidate_peers_cache()
+            statuses = sec_node.get_peer_statuses()
+            peer = next((p for p in statuses if p["id"] == "primary-bakuhu"), None)
+            assert peer is not None, "primary-bakuhu should appear in secondary.get_peer_statuses()"
+            assert peer["pubsub_connected"] is True, (
+                f"primary-bakuhu pubsub_connected should be True, got: {peer}"
+            )
+        finally:
+            await node.stop()
+
+        # 切断後: pubsub フラグが False に戻ることを確認（最大2秒）
+        for _ in range(20):
+            await asyncio.sleep(0.1)
+            if not sec_node._peer_status.get("primary-bakuhu", {}).get("pubsub", True):
+                break
+
+        assert sec_node._peer_status.get("primary-bakuhu", {}).get("pubsub", True) is False, (
+            "secondary should reset primary-bakuhu pubsub=False after disconnect (try/finally)"
+        )

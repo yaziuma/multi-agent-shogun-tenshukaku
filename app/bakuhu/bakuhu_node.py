@@ -692,6 +692,7 @@ class BakuhuNode:
                     stale_keys.append(from_bakuhu)
                     continue
                 if from_bakuhu not in existing_ids:
+                    inc_status = self._peer_status.get(from_bakuhu, {})
                     result.append(
                         {
                             "id": from_bakuhu,
@@ -699,7 +700,7 @@ class BakuhuNode:
                             "base_url": "",
                             "status": "online",
                             "rpc_connected": True,
-                            "pubsub_connected": False,
+                            "pubsub_connected": inc_status.get("pubsub", False),
                         }
                     )
             for key in stale_keys:
