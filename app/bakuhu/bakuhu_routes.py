@@ -317,19 +317,8 @@ async def bakuhu_files(
 # ------------------------------------------------------------------ #
 
 
-def _get_rpc_endpoint(request_or_ws) -> WebsocketRPCEndpoint:
-    """app.stateからRPCエンドポイントを取得。未初期化ならnodeから生成してキャッシュする。
-
-    グローバル変数ではなく app.state に保持することで、node と同一ライフサイクルを保証し
-    テスト間の stale 参照を防止する。
-    """
-    app = request_or_ws.app
-    endpoint = getattr(app.state, "bakuhu_rpc_endpoint", None)
-    if endpoint is None:
-        node: BakuhuNode = _get_node(request_or_ws)
-        endpoint = WebsocketRPCEndpoint(BakuhuRpcServerMethods(node))
-        app.state.bakuhu_rpc_endpoint = endpoint
-    return endpoint
+# _get_rpc_endpoint は bakuhu_ws_rpc() がper-connection endpointに移行したため不使用
+# def _get_rpc_endpoint(request_or_ws) -> WebsocketRPCEndpoint:
 
 
 def _get_pubsub_endpoint(request_or_ws) -> PubSubEndpoint:
@@ -359,7 +348,23 @@ async def bakuhu_ws_rpc(websocket: WebSocket, token: str = Query(default="")):
         )
     )
 
-    endpoint = _get_rpc_endpoint(websocket)
+    async def _on_rpc_connect(channel, **kwargs):
+        """incoming RPC接続確立時にpeer_idとchannelを_incoming_channelsに登録"""
+        node._incoming_channels[peer_id] = channel
+        node.invalidate_peers_cache()
+        logger.info("[RPC] server-side incoming registered: peer=%s", peer_id)
+
+    async def _on_rpc_disconnect(channel, **kwargs):
+        """切断時にincoming_channelsから削除"""
+        node._incoming_channels.pop(peer_id, None)
+        node.invalidate_peers_cache()
+        logger.info("[RPC] server-side incoming removed: peer=%s", peer_id)
+
+    endpoint = WebsocketRPCEndpoint(
+        BakuhuRpcServerMethods(node),
+        on_connect=[_on_rpc_connect],
+        on_disconnect=[_on_rpc_disconnect],
+    )
     await endpoint.main_loop(websocket)
 
 

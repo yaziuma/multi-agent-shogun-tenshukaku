@@ -1591,3 +1591,40 @@ class TestWebSocketRealConnection:
                 await task
             except (asyncio.CancelledError, Exception):
                 pass
+
+    async def test_tc_rpc_register_03_on_connect_registers_without_register_peer(
+        self, tmp_path, secondary_server
+    ):
+        """TC-RPC-REGISTER-03: on_connectコールバックでregister_peer()なしにincoming_channels登録される
+
+        検証内容:
+        - primaryがsecondaryのWS RPCエンドポイントに接続
+        - register_peer() RPCを呼ばなくても、secondary._incoming_channelsにprimaryが登録される
+        - これはbakuhu_ws_rpc()のon_connectコールバックによる登録を検証する
+        """
+        base_url, port, sec_settings, sec_app = secondary_server
+
+        prim_path = tmp_path / "primary"
+        prim_path.mkdir(parents=True, exist_ok=True)
+        prim_settings = _make_primary_settings(prim_path, secondary_base_url=base_url)
+
+        prim_app = make_app(prim_settings)
+        node = prim_app.state.bakuhu_node
+        await node.start()
+
+        try:
+            sec_node = sec_app.state.bakuhu_node
+            # on_connect登録を待つ（最大3秒）
+            # register_peer()より先にon_connectが呼ばれるため、接続直後に登録されるはず
+            for _ in range(30):
+                await asyncio.sleep(0.1)
+                if "primary-bakuhu" in sec_node._incoming_channels:
+                    break
+
+            # TC-RPC-REGISTER-03: on_connectでincoming_channelsに登録されている
+            assert "primary-bakuhu" in sec_node._incoming_channels, (
+                "secondary should have registered primary-bakuhu in incoming_channels "
+                "via on_connect callback (without waiting for register_peer RPC)"
+            )
+        finally:
+            await node.stop()
