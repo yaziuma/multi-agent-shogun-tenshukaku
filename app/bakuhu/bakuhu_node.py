@@ -654,6 +654,30 @@ class BakuhuNode:
                     "pubsub_connected": status.get("pubsub", False),
                 }
             )
+        # secondary向け: incoming_rpc_channelsに登録されたprimary接続も表示
+        # （設計書 protocol_v2.md L454: SNodeはincoming_rpc_channelsにchannelを登録）
+        role = cfg.get("role", "secondary")
+        if role != "primary":
+            existing_ids = {r["id"] for r in result}
+            stale_keys = []
+            for from_bakuhu, channel in list(self._incoming_channels.items()):
+                if channel.isClosed():
+                    stale_keys.append(from_bakuhu)
+                    continue
+                if from_bakuhu not in existing_ids:
+                    result.append(
+                        {
+                            "id": from_bakuhu,
+                            "name": from_bakuhu,
+                            "base_url": "",
+                            "status": "online",
+                            "rpc_connected": True,
+                            "pubsub_connected": False,
+                        }
+                    )
+            for key in stale_keys:
+                del self._incoming_channels[key]
+
         self._peers_cache_time = now
         self._peers_cache_data = list(result)
         return result

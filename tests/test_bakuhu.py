@@ -895,6 +895,73 @@ class TestPeersCacheTTL:
         assert any(p["rpc_connected"] is True for p in result)
 
 
+class TestSecondaryIncomingChannelPeers:
+    """TC-SEC-PEER-01～03: secondary側のget_peer_statuses()でincoming_channelsを反映するテスト
+    （設計書 protocol_v2.md L454: SNodeはincoming_rpc_channelsにchannelを登録）
+    """
+
+    def _make_secondary_settings(self, tmp_path: Path) -> dict:
+        """secondaryのsettings（peersリストなし）"""
+        return {
+            "bakuhu": {
+                "base_path": str(tmp_path),
+                "role": "secondary",
+                "name": "secondary-bakuhu",
+                "outbound_token": "token-secondary",
+                "accepted_tokens": {
+                    "token-primary": "primary-bakuhu",
+                },
+                "upload_dir": "cross_bakuhu/files",
+            }
+        }
+
+    def test_incoming_channel_shown_as_online(self, tmp_path):
+        """TC-SEC-PEER-01: _incoming_channelsに登録されたprimaryがonlineで返る"""
+        settings = self._make_secondary_settings(tmp_path)
+        node = BakuhuNode(settings=settings)
+
+        mock_channel = MagicMock()
+        mock_channel.isClosed.return_value = False
+        node._incoming_channels["primary-bakuhu"] = mock_channel
+
+        statuses = node.get_peer_statuses()
+
+        assert len(statuses) == 1
+        peer = statuses[0]
+        assert peer["id"] == "primary-bakuhu"
+        assert peer["status"] == "online"
+        assert peer["rpc_connected"] is True
+
+    def test_closed_incoming_channel_excluded_and_removed(self, tmp_path):
+        """TC-SEC-PEER-02: isClosed()=Trueのchannelはstaleとしてリストから除外・削除される"""
+        settings = self._make_secondary_settings(tmp_path)
+        node = BakuhuNode(settings=settings)
+
+        mock_channel = MagicMock()
+        mock_channel.isClosed.return_value = True
+        node._incoming_channels["primary-bakuhu"] = mock_channel
+
+        statuses = node.get_peer_statuses()
+
+        assert statuses == []
+        assert "primary-bakuhu" not in node._incoming_channels
+
+    def test_primary_role_ignores_incoming_channels(self, tmp_path):
+        """TC-SEC-PEER-03: primary roleではincoming_channelsを参照しない"""
+        settings = make_settings(tmp_path, role="primary")
+        node = BakuhuNode(settings=settings)
+
+        mock_channel = MagicMock()
+        mock_channel.isClosed.return_value = False
+        node._incoming_channels["some-bakuhu"] = mock_channel
+
+        statuses = node.get_peer_statuses()
+
+        # primaryはincoming_channelsを追加しない
+        ids = [p["id"] for p in statuses]
+        assert "some-bakuhu" not in ids
+
+
 @pytest.mark.asyncio
 class TestDelegateRPC:
     """TC-DLG-01, TC-DLG-02: delegate() RPC実装テスト"""

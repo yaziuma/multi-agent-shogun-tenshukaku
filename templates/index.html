@@ -1565,7 +1565,7 @@ function renderPeerTable(peers) {
 }
 
 function fetchPeers() {
-    return fetch('{{ base_path }}/bakuhu/peers')
+    return fetch('{{ base_path }}/bakuhu/peers?token={{ settings.bakuhu.outbound_token | default("") }}')
         .then(res => {
             if (!res.ok) throw new Error('HTTP ' + res.status);
             return res.json();
