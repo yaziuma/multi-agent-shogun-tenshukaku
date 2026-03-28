@@ -4,7 +4,22 @@
 
 bakuhu:
   # multi-agent-bakuhu リポジトリのパス（要変更）
-  base_path: /path/to/your/multi-agent-bakuhu
+  base_path: "/path/to/your/multi-agent-bakuhu"
+
+  # Inter-Bakuhu Network settings (bakuhu fork only — omit if not using multi-machine delegation)
+  # See docs/inter-bakuhu/setup.md for full setup guide.
+  #
+  # role: primary shogun または secondary shogun
+  # role: primary
+  # name: "your-bakuhu-name"
+  # outbound_token: "your-outbound-token-here"
+  # accepted_tokens:
+  #   your-peer-token-here: "peer-id-here"
+  # upload_dir: "queue/cross_bakuhu/files"
+  # peers:                    # primary only — list of secondary shogun instances
+  #   - id: "secondary-a"
+  #     name: "Secondary Bakuhu A"
+  #     base_url: "http://your-secondary-tailscale-ip:30001"
 
 gunicorn:
   workers: 2

@@ -274,6 +274,24 @@ Tenshukaku works with any multi-agent-shogun family system. All session names, p
 | [yaziuma/multi-agent-bakuhu](https://github.com/yaziuma/multi-agent-bakuhu) | Developed for this system |
 | [yohey-w/multi-agent-shogun](https://github.com/yohey-w/multi-agent-shogun) | Compatible — adjust `bakuhu.base_path` and `tmux` session names in settings |
 
+## 🏯 Inter-Bakuhu Network
+
+Connect multiple Bakuhu instances across machines — delegate tasks from your primary
+Bakuhu to secondary Bakuhu instances over a secure Tailscale VPN.
+
+> **Full documentation**: [docs/inter-bakuhu/setup.md](docs/inter-bakuhu/setup.md)
+
+| Feature | Description |
+|---------|-------------|
+| Multi-machine delegation | Send tasks from primary to secondary Bakuhu |
+| WebSocket RPC/PubSub | Real-time bidirectional connection |
+| Token authentication | Per-peer token isolation |
+| Role enforcement | Only primary can initiate delegation |
+
+**Quick setup**: Set `bakuhu.role: primary` on your main machine, `role: secondary`
+on the remote machine, configure `peers` with Tailscale IPs.
+See [docs/inter-bakuhu/setup.md](docs/inter-bakuhu/setup.md) for full setup guide.
+
 ## Related Projects
 
 - [multi-agent-bakuhu](https://github.com/yaziuma/multi-agent-bakuhu) — The core multi-agent orchestration system that Tenshukaku controls
