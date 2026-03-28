@@ -151,6 +151,10 @@ echo -e "${YELLOW}[3/3] サーバーを起動中...${NC}"
 
 cd "$PROJECT_DIR"
 echo "  → uvicorn main:app --host $HOST --port $PORT --reload"
+# Note: このスクリプトはフォアグラウンド起動のためログはターミナルに出力されます。
+# アプリ側の logging_config.py による RotatingFileHandler も有効であり、
+# logs/shogun-web.log にも同時に記録されます。
+# 本番デーモン起動は start.sh を使用してください。
 echo ""
 
 # 起動コマンドを実行（--reload でホットリロード有効）

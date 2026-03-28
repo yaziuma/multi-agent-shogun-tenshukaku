@@ -101,7 +101,7 @@ sleep 1
 # multi-agent-shogun-tenshukaku起動
 echo "multi-agent-shogun-tenshukaku を起動中..."
 cd "$PROJECT_DIR"
-nohup uv run gunicorn main:app -w $WORKERS -k uvicorn.workers.UvicornWorker --bind $HOST:$PORT --pid "$PROJECT_DIR/gunicorn.pid" > "$LOG_FILE" 2>&1 &
+nohup uv run gunicorn main:app -w $WORKERS -k uvicorn.workers.UvicornWorker --bind $HOST:$PORT --pid "$PROJECT_DIR/gunicorn.pid" --access-logfile "$LOG_FILE" --error-logfile "$LOG_FILE" >> /dev/null 2>&1 &
 NEW_PID=$!
 
 echo "起動コマンドを実行しました（PID: $NEW_PID）"

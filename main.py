@@ -9,9 +9,6 @@ from contextlib import asynccontextmanager
 from datetime import datetime
 from pathlib import Path
 
-logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(name)s: %(message)s")
-logger = logging.getLogger(__name__)
-
 import uvicorn
 import yaml
 from fastapi import FastAPI, Form, HTTPException, Request, WebSocket
@@ -23,10 +20,14 @@ from pydantic import BaseModel
 
 from app.bakuhu.bakuhu_node import BakuhuNode
 from app.bakuhu.bakuhu_routes import router as bakuhu_router
+from app.logging_config import setup_logging
 from app.ws.broadcasters import AdaptivePoller, MonitorBroadcaster, ShogunBroadcaster
 from app.ws.handlers import MonitorWebSocketHandler, WebSocketHandler
 from app.ws.runtime import TmuxRuntime
 from app.ws.tmux_bridge import TmuxBridge
+
+setup_logging()
+logger = logging.getLogger(__name__)
 
 
 @asynccontextmanager
@@ -82,7 +83,9 @@ async def lifespan(app: FastAPI):
     app.state.bakuhu_node = bakuhu_node
 
     # Expose bakuhu_role as a Jinja2 global for all templates
-    templates.env.globals["bakuhu_role"] = settings.get("bakuhu", {}).get("role", "secondary")
+    templates.env.globals["bakuhu_role"] = settings.get("bakuhu", {}).get(
+        "role", "secondary"
+    )
 
     yield
 
@@ -199,6 +202,8 @@ _MIME_TO_EXT = {
     "image/gif": "gif",
     "image/webp": "webp",
 }
+
+
 def _get_file_ext(mime_type: str, file_name: str) -> str:
     """Return safe file extension: MIME-table for images, filename-based for others."""
     if mime_type in _MIME_TO_EXT:
@@ -520,7 +525,9 @@ async def file_paste(request: Request, body: FilePasteRequest):
     try:
         file_data = base64.b64decode(body.file_b64)
     except Exception as exc:
-        raise HTTPException(status_code=400, detail=f"Invalid base64 data: {exc}") from exc
+        raise HTTPException(
+            status_code=400, detail=f"Invalid base64 data: {exc}"
+        ) from exc
 
     bridge = request.app.state.tmux_bridge
     settings = request.app.state.settings
@@ -555,7 +562,9 @@ async def file_paste(request: Request, body: FilePasteRequest):
             f.write(file_data)
         logger.info("[FILE-PASTE] saved to %s (%d bytes)", file_path, len(file_data))
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to save file: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"Failed to save file: {exc}"
+        ) from exc
 
     # Build send-keys message
     safe_prefix = re.sub(r"[\x00-\x1f\x7f]", "", body.message_prefix)[:200]
@@ -566,7 +575,9 @@ async def file_paste(request: Request, body: FilePasteRequest):
 
     # Send file path to shogun pane via tmux send-keys
     success = bridge.send_to_shogun(sent_message)
-    logger.info("[FILE-PASTE] send_to_shogun result=%s, message=%s", success, sent_message)
+    logger.info(
+        "[FILE-PASTE] send_to_shogun result=%s, message=%s", success, sent_message
+    )
 
     if success:
         return {
@@ -576,7 +587,9 @@ async def file_paste(request: Request, body: FilePasteRequest):
             "sent_message": sent_message,
         }
     else:
-        raise HTTPException(status_code=500, detail="Failed to send file path via tmux send-keys")
+        raise HTTPException(
+            status_code=500, detail="Failed to send file path via tmux send-keys"
+        )
 
 
 @app.delete("/api/files/{filename}")
@@ -613,7 +626,9 @@ async def delete_file(filename: str):
         logger.info("[FILE-DELETE] deleted %s", file_path)
         return {"status": "deleted", "filename": filename}
     except OSError as exc:
-        raise HTTPException(status_code=500, detail=f"Failed to delete file: {exc}") from exc
+        raise HTTPException(
+            status_code=500, detail=f"Failed to delete file: {exc}"
+        ) from exc
 
 
 @app.post("/api/image-paste")
