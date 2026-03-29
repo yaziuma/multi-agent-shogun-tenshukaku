@@ -76,3 +76,8 @@
 !/tests/**/*.py
 !/tests/screenshots/
 !/tests/screenshots/**/*.png
+
+# Allow docs/inter-bakuhu
+!/docs/inter-bakuhu/setup.md
+!/docs/inter-bakuhu/setup_ja.md
+!/docs/inter-bakuhu/screenshots/*.png
