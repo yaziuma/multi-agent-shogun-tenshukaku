@@ -56,9 +56,31 @@ def _authenticate_token(token: str, accepted_tokens: dict) -> str | None:
 def _validate_token_ws(token: str | None, accepted_tokens: dict) -> str:
     """WebSocket用トークン検証。失敗時はWebSocketException(4003)。"""
     if not token:
+        audit_logger.warning(
+            json.dumps(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "action": "auth_failed",
+                    "path": "ws",
+                    "peer": "none",
+                    "reason": "missing_token",
+                }
+            )
+        )
         raise WebSocketException(code=4003, reason="missing token")
     peer_id = _authenticate_token(token, accepted_tokens)
     if peer_id is None:
+        audit_logger.warning(
+            json.dumps(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "action": "auth_failed",
+                    "path": "ws",
+                    "peer": token[:8] + "..." if len(token) > 8 else "short",
+                    "reason": "invalid_token",
+                }
+            )
+        )
         raise WebSocketException(code=4003, reason="invalid token")
     return peer_id
 
@@ -196,6 +218,17 @@ async def bakuhu_disconnect(
             node._peer_status[peer_id]["rpc"] = False
             node._peer_status[peer_id]["pubsub"] = False
 
+    audit_logger.info(
+        json.dumps(
+            {
+                "timestamp": datetime.now(UTC).isoformat(),
+                "action": "disconnect_requested",
+                "peer_id": peer_id,
+                "by_peer": auth_peer,
+            }
+        )
+    )
+
     return {"disconnected": True, "peer_id": peer_id}
 
 
@@ -280,13 +313,13 @@ async def bakuhu_files(
         raise HTTPException(status_code=403, detail="invalid token")
     # from_bakuhu整合チェック
     if peer_id != from_bakuhu:
-            raise HTTPException(
-                status_code=422,
-                detail={
-                    "error": "peer_mismatch",
-                    "detail": f"token resolves to {peer_id}, not {from_bakuhu}",
-                },
-            )
+        raise HTTPException(
+            status_code=422,
+            detail={
+                "error": "peer_mismatch",
+                "detail": f"token resolves to {peer_id}, not {from_bakuhu}",
+            },
+        )
 
     # ファイル名サニタイズ
     safe_name = os.path.basename(file.filename or "upload.bin")
@@ -410,6 +443,15 @@ async def bakuhu_ws_rpc(websocket: WebSocket, token: str = Query(default="")):
         node._incoming_channels.pop(peer_id, None)
         node.invalidate_peers_cache()
         logger.info("[RPC] server-side incoming removed: peer=%s", peer_id)
+        audit_logger.info(
+            json.dumps(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "action": "rpc_disconnected",
+                    "peer_id": peer_id,
+                }
+            )
+        )
 
     endpoint = WebsocketRPCEndpoint(
         BakuhuRpcServerMethods(node),
@@ -448,3 +490,12 @@ async def bakuhu_ws_pubsub(websocket: WebSocket, token: str = Query(default=""))
         node._peer_status.setdefault(peer_id, {})["pubsub"] = False
         node.invalidate_peers_cache()
         logger.info("[PubSub] incoming peer disconnected: %s", peer_id)
+        audit_logger.info(
+            json.dumps(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "action": "pubsub_disconnected",
+                    "peer_id": peer_id,
+                }
+            )
+        )

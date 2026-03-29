@@ -288,7 +288,11 @@ class BakuhuRpcServerMethods(RpcMethodsBase):
         if from_bakuhu and self.channel is not None:
             self._node._incoming_channels[from_bakuhu] = self.channel
             self._node.invalidate_peers_cache()
-            logger.info("[RPC] registered incoming peer: %s (base_url=%s)", from_bakuhu, base_url)
+            logger.info(
+                "[RPC] registered incoming peer: %s (base_url=%s)",
+                from_bakuhu,
+                base_url,
+            )
         return {"registered": bool(from_bakuhu)}
 
     async def get_bakuhu_info(self, **kwargs: Any) -> dict:
@@ -409,14 +413,29 @@ class BakuhuNode:
                     self._peer_status[peer_id]["last_seen"] = time.monotonic()
                     delay = 2.0  # 接続成功でリセット
                     logger.info("[RPC] connected to peer=%s", peer_id)
+                    audit_logger.info(
+                        json.dumps(
+                            {
+                                "timestamp": datetime.now(UTC).isoformat(),
+                                "action": "rpc_client_connected",
+                                "peer_id": peer_id,
+                            }
+                        )
+                    )
                     # secondaryにpeer登録通知（secondary側でincoming_channelsに登録させる）
                     _my_cfg = self._settings.get("bakuhu", {})
                     _my_name = _my_cfg.get("name", "")
                     if _my_name:
                         try:
-                            await client.other.register_peer(from_bakuhu=_my_name, base_url=base_url)
+                            await client.other.register_peer(
+                                from_bakuhu=_my_name, base_url=base_url
+                            )
                         except Exception as _e:
-                            logger.warning("[RPC] register_peer failed for peer=%s: %s", peer_id, _e)
+                            logger.warning(
+                                "[RPC] register_peer failed for peer=%s: %s",
+                                peer_id,
+                                _e,
+                            )
                     try:
                         await client.wait_on_reader()
                     finally:
@@ -426,6 +445,15 @@ class BakuhuNode:
             except Exception as exc:
                 is_auth_error = self._is_auth_error(exc)
                 logger.warning("[RPC] disconnected from peer=%s: %s", peer_id, exc)
+                audit_logger.info(
+                    json.dumps(
+                        {
+                            "timestamp": datetime.now(UTC).isoformat(),
+                            "action": "rpc_client_disconnected",
+                            "peer_id": peer_id,
+                        }
+                    )
+                )
                 self._peer_status[peer_id]["rpc"] = False
 
                 if is_auth_error:
@@ -492,6 +520,16 @@ class BakuhuNode:
         my_name = cfg.get("name", "primary-bakuhu")
         if not request_id:
             request_id = f"req_{datetime.now(UTC).strftime('%Y%m%dT%H%M%S')}_{peer_id}"
+        audit_logger.info(
+            json.dumps(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "action": "delegate_initiated",
+                    "target_peer": peer_id,
+                    "request_id": request_id,
+                }
+            )
+        )
         result = await client.other.submit_delegation(
             request_id=request_id,
             content=instruction,
