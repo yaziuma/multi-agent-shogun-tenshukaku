@@ -527,6 +527,8 @@ class BakuhuNode:
                     "action": "delegate_initiated",
                     "target_peer": peer_id,
                     "request_id": request_id,
+                    "instruction_preview": instruction[:200] if instruction else "",
+                    "priority": priority,
                 }
             )
         )
@@ -535,6 +537,19 @@ class BakuhuNode:
             content=instruction,
             from_bakuhu=my_name,
             priority=priority,
+        )
+        result_dict: dict = result.result if hasattr(result, "result") else result
+        audit_logger.info(
+            json.dumps(
+                {
+                    "timestamp": datetime.now(UTC).isoformat(),
+                    "action": "delegate_completed",
+                    "target_peer": peer_id,
+                    "request_id": request_id,
+                    "accepted": result_dict.get("accepted"),
+                    "reason": result_dict.get("reason", ""),
+                }
+            )
         )
         return result
 

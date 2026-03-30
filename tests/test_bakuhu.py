@@ -974,7 +974,11 @@ class TestDelegateRPC:
         # 外部RPC clientをモック（ネットワーク境界）
         mock_client = MagicMock()
         mock_client.other.submit_delegation = AsyncMock(
-            return_value={"accepted": True, "request_id": "req-001", "status": "received"}
+            return_value={
+                "accepted": True,
+                "request_id": "req-001",
+                "status": "received",
+            }
         )
         node._rpc_clients["secondary-a"] = mock_client
 
@@ -991,7 +995,11 @@ class TestDelegateRPC:
             from_bakuhu="primary-bakuhu",
             priority="normal",
         )
-        assert result == {"accepted": True, "request_id": "req-001", "status": "received"}
+        assert result == {
+            "accepted": True,
+            "request_id": "req-001",
+            "status": "received",
+        }
 
     async def test_delegate_raises_when_not_connected(self, tmp_path):
         """TC-DLG-02: _rpc_clientsが空ならRuntimeErrorを raise"""
@@ -1249,7 +1257,9 @@ async def secondary_server(tmp_path):
     sec_path = tmp_path / "secondary"
     sec_path.mkdir(parents=True, exist_ok=True)
 
-    sec_settings = _make_secondary_settings(sec_path, primary_outbound_token="token-primary")
+    sec_settings = _make_secondary_settings(
+        sec_path, primary_outbound_token="token-primary"
+    )
     sec_app = make_app(sec_settings)
 
     config = uvicorn.Config(sec_app, host="127.0.0.1", port=port, log_level="error")
@@ -1283,7 +1293,9 @@ class TestWebSocketRealConnection:
     WebSocketは fastapi-websocket-rpc の実接続で検証する（モックのみで完結させない）。
     """
 
-    async def test_tc_ws_01_rpc_connection_established(self, tmp_path, secondary_server):
+    async def test_tc_ws_01_rpc_connection_established(
+        self, tmp_path, secondary_server
+    ):
         """TC-WS-01: RPC実接続でpeerがonlineになることを確認（primary発呼のみ）
 
         設計書 L535-544:
@@ -1368,7 +1380,11 @@ class TestWebSocketRealConnection:
                 request_id="req-ws02",
                 priority="normal",
             )
-            delegation_result = delegation_rpc.result if hasattr(delegation_rpc, "result") else delegation_rpc
+            delegation_result = (
+                delegation_rpc.result
+                if hasattr(delegation_rpc, "result")
+                else delegation_rpc
+            )
             assert delegation_result.get("accepted") is True, (
                 f"submit_delegation should be accepted: {delegation_result}"
             )
@@ -1468,15 +1484,11 @@ class TestWebSocketRealConnection:
                 transport=ASGITransport(app=sec_app), base_url="http://test"
             ) as client:
                 # secondary の accepted_tokens には "token-primary" が登録されている
-                resp = await client.get(
-                    "/bakuhu/peers?token=token-primary"
-                )
+                resp = await client.get("/bakuhu/peers?token=token-primary")
 
             assert resp.status_code == 200
             peers = resp.json()["peers"]
-            primary_peer = next(
-                (p for p in peers if p["id"] == "primary-bakuhu"), None
-            )
+            primary_peer = next((p for p in peers if p["id"] == "primary-bakuhu"), None)
             assert primary_peer is not None, (
                 "secondary /bakuhu/peers should list primary-bakuhu"
             )
@@ -1573,9 +1585,7 @@ class TestWebSocketRealConnection:
 
             assert resp.status_code == 200
             peers = resp.json()["peers"]
-            primary_peer = next(
-                (p for p in peers if p["id"] == "primary-bakuhu"), None
-            )
+            primary_peer = next((p for p in peers if p["id"] == "primary-bakuhu"), None)
             assert primary_peer is not None, (
                 "secondary /bakuhu/peers should list primary-bakuhu (configured peer)"
             )
@@ -1629,7 +1639,9 @@ class TestWebSocketRealConnection:
         finally:
             await node.stop()
 
-    async def test_tc_pubsub_status_01_pubsub_connected_flag(self, tmp_path, secondary_server):
+    async def test_tc_pubsub_status_01_pubsub_connected_flag(
+        self, tmp_path, secondary_server
+    ):
         """TC-PUBSUB-STATUS-01: primaryがsecondaryのPubSubエンドポイントに接続したとき
         secondary.get_peer_statuses()でpubsub_connected:trueを確認し、
         切断後にpubsub_connected:falseに戻ることを確認する。
@@ -1660,7 +1672,9 @@ class TestWebSocketRealConnection:
                     break
 
             # TC-PUBSUB-STATUS-01: secondary._peer_status に pubsub フラグが立っている
-            assert sec_node._peer_status.get("primary-bakuhu", {}).get("pubsub") is True, (
+            assert (
+                sec_node._peer_status.get("primary-bakuhu", {}).get("pubsub") is True
+            ), (
                 "secondary should mark primary-bakuhu pubsub=True after incoming pubsub connection"
             )
 
@@ -1668,7 +1682,9 @@ class TestWebSocketRealConnection:
             sec_node.invalidate_peers_cache()
             statuses = sec_node.get_peer_statuses()
             peer = next((p for p in statuses if p["id"] == "primary-bakuhu"), None)
-            assert peer is not None, "primary-bakuhu should appear in secondary.get_peer_statuses()"
+            assert peer is not None, (
+                "primary-bakuhu should appear in secondary.get_peer_statuses()"
+            )
             assert peer["pubsub_connected"] is True, (
                 f"primary-bakuhu pubsub_connected should be True, got: {peer}"
             )
@@ -1681,7 +1697,9 @@ class TestWebSocketRealConnection:
             if not sec_node._peer_status.get("primary-bakuhu", {}).get("pubsub", True):
                 break
 
-        assert sec_node._peer_status.get("primary-bakuhu", {}).get("pubsub", True) is False, (
+        assert (
+            sec_node._peer_status.get("primary-bakuhu", {}).get("pubsub", True) is False
+        ), (
             "secondary should reset primary-bakuhu pubsub=False after disconnect (try/finally)"
         )
 
@@ -1764,7 +1782,9 @@ class TestDelegateHTTP:
         app = make_app(settings)
         node = app.state.bakuhu_node
 
-        node.delegate = AsyncMock(side_effect=RuntimeError("peer 'secondary-a' not connected"))
+        node.delegate = AsyncMock(
+            side_effect=RuntimeError("peer 'secondary-a' not connected")
+        )
 
         async with AsyncClient(
             transport=ASGITransport(app=app), base_url="http://test"
@@ -1792,3 +1812,134 @@ class TestDelegateHTTP:
 
         assert response.status_code == 403
         assert "secondary cannot call delegate" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+class TestDelegateAuditLog:
+    """TC-DLG-LOG-01, TC-DLG-LOG-02: delegate() 監査ログテスト"""
+
+    async def test_delegate_initiated_log_includes_instruction_preview_and_priority(
+        self, tmp_path, caplog
+    ):
+        """TC-DLG-LOG-01: delegate_initiated ログに instruction_preview と priority が含まれる"""
+        import logging
+
+        settings = make_settings(tmp_path)
+        node = BakuhuNode(settings=settings)
+
+        mock_client = MagicMock()
+        mock_client.other.submit_delegation = AsyncMock(
+            return_value={
+                "accepted": True,
+                "request_id": "req-log-001",
+                "status": "received",
+            }
+        )
+        node._rpc_clients["secondary-a"] = mock_client
+
+        instruction = "A" * 300  # 300文字 → previewは200文字に切り詰め
+
+        with caplog.at_level(logging.INFO, logger="bakuhu.audit"):
+            await node.delegate(
+                peer_id="secondary-a",
+                instruction=instruction,
+                request_id="req-log-001",
+                priority="high",
+            )
+
+        import json as _json
+
+        initiated_records = [
+            r
+            for r in caplog.records
+            if r.name == "bakuhu.audit" and "delegate_initiated" in r.message
+        ]
+        assert len(initiated_records) == 1, "delegate_initiated ログが1件記録されること"
+
+        log_data = _json.loads(initiated_records[0].message)
+        assert log_data["action"] == "delegate_initiated"
+        assert "instruction_preview" in log_data, (
+            "instruction_preview フィールドが存在すること"
+        )
+        assert log_data["instruction_preview"] == "A" * 200, (
+            "instruction_preview が先頭200文字であること"
+        )
+        assert "priority" in log_data, "priority フィールドが存在すること"
+        assert log_data["priority"] == "high"
+
+    async def test_delegate_completed_log_recorded_after_rpc(self, tmp_path, caplog):
+        """TC-DLG-LOG-02: RPC応答後に delegate_completed ログが記録され accepted/reason を持つ"""
+        import logging
+
+        settings = make_settings(tmp_path)
+        node = BakuhuNode(settings=settings)
+
+        mock_client = MagicMock()
+        mock_client.other.submit_delegation = AsyncMock(
+            return_value={
+                "accepted": False,
+                "reason": "duplicate",
+                "request_id": "req-log-002",
+            }
+        )
+        node._rpc_clients["secondary-a"] = mock_client
+
+        with caplog.at_level(logging.INFO, logger="bakuhu.audit"):
+            await node.delegate(
+                peer_id="secondary-a",
+                instruction="完了ログテスト",
+                request_id="req-log-002",
+                priority="normal",
+            )
+
+        import json as _json
+
+        completed_records = [
+            r
+            for r in caplog.records
+            if r.name == "bakuhu.audit" and "delegate_completed" in r.message
+        ]
+        assert len(completed_records) == 1, "delegate_completed ログが1件記録されること"
+
+        log_data = _json.loads(completed_records[0].message)
+        assert log_data["action"] == "delegate_completed"
+        assert log_data["target_peer"] == "secondary-a"
+        assert log_data["request_id"] == "req-log-002"
+        assert "accepted" in log_data, "accepted フィールドが存在すること"
+        assert log_data["accepted"] is False
+        assert "reason" in log_data, "reason フィールドが存在すること"
+        assert log_data["reason"] == "duplicate"
+
+    async def test_delegate_instruction_preview_empty_when_instruction_is_empty(
+        self, tmp_path, caplog
+    ):
+        """TC-DLG-LOG-03: instruction が空文字のとき instruction_preview も空文字"""
+        import logging
+
+        settings = make_settings(tmp_path)
+        node = BakuhuNode(settings=settings)
+
+        mock_client = MagicMock()
+        mock_client.other.submit_delegation = AsyncMock(
+            return_value={"accepted": True, "request_id": "req-log-003"}
+        )
+        node._rpc_clients["secondary-a"] = mock_client
+
+        with caplog.at_level(logging.INFO, logger="bakuhu.audit"):
+            await node.delegate(
+                peer_id="secondary-a",
+                instruction="",
+                request_id="req-log-003",
+                priority="low",
+            )
+
+        import json as _json
+
+        initiated_records = [
+            r
+            for r in caplog.records
+            if r.name == "bakuhu.audit" and "delegate_initiated" in r.message
+        ]
+        assert len(initiated_records) == 1
+        log_data = _json.loads(initiated_records[0].message)
+        assert log_data["instruction_preview"] == ""
