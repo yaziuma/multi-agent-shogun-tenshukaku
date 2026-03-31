@@ -1032,7 +1032,9 @@ let monitorWs = null;
             if (data.type === 'reset') {
                 const fullText = data.lines.join('\n');
                 updateRawOutput(fullText);
-                // reset はraw output更新のみ。chat logへの追加は行わない（重複防止）
+                if (fullText.trim()) {
+                    addChatMessage(fullText.trim(), 'shogun');
+                }
                 if (wasAtBottom) {
                     el.scrollTop = el.scrollHeight;
                 }
