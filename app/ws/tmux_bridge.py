@@ -7,6 +7,7 @@ allowing remote control and monitoring of the multi-agent system.
 
 import re
 import subprocess
+import time
 from datetime import datetime
 from pathlib import Path
 
@@ -247,6 +248,7 @@ class TmuxBridge:
                 ["tmux", "send-keys", "-t", target, message],
                 check=True,
             )
+            time.sleep(0.05)  # TUI入力バッファの処理待ち（Codex等のTUIアプリ対応）
             subprocess.run(
                 ["tmux", "send-keys", "-t", target, "Enter"],
                 check=True,
