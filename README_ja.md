@@ -16,11 +16,37 @@
 
 将軍エージェントのtmuxペインに直接メッセージを送信する。Ctrl+Enterによるクイック送信と、Claude Codeの割り込みに使うEscapeキー送信ボタンを備える。Top/Bottomスクロールボタンで長い出力のナビゲーションが可能。
 
+**入力テキストエリアは自動リサイズ**される（1行〜設定可能な最大行数、デフォルト8行）。テンプレートフレーズが設定されている場合は、テキストエリア上部に **規定文言** ドロップダウンが表示される。文言を選択するとカーソル位置に挿入されるため、既存のテキストを消さずに繰り返し利用できる。
+
 折りたたみ式の **TUI操作パネル** から、方向キー、Enter、Tab、Space、Backspace、数字キー（0-9）、Yes/No確認ボタンなどのキーボード入力を直接送信可能。ブラウザを離れることなく対話型CLIインターフェースを操作できる。決定系キー（Enter、Escape、Yes、No）は誤操作防止のため1秒長押しで発動する。
 
 **会話ログ** セクションでは、対話形式のビューを表示する。ユーザーの送信メッセージは青色、将軍の応答は金色で表示される。tmuxペインの生出力は会話ログの下の折りたたみセクションで確認可能。
 
 ![指揮タブ](assets/screenshots/tab-command.png)
+
+#### ファイル添付（📎）
+
+テキストエリア右側の **📎ファイル添付ボタン** から、ファイルをClaude Codeのtmuxペインへ直接送信できる。
+
+**仕組み:**
+
+1. ブラウザがファイルをBase64エンコードして `/api/file-paste` に送信
+2. サーバーがファイルを `/tmp/tenshukaku-images/` にタイムスタンプ付きで保存
+3. ファイルパスを `tmux send-keys` 経由で将軍ペインに送信
+4. Claude CodeがパスをRead toolで読み取り、画像・PDF・テキスト・コードファイルなどを認識
+
+**対応入力方式:**
+- **📎ボタン** — クリックでファイルピッカーを開く（複数ファイル対応）
+- **ドラッグ＆ドロップ** — コマンド入力エリアにファイルをドロップ
+- **Ctrl+V / ペースト** — クリップボードの画像をテキストエリアに直接貼り付け
+- ファイルはテキストエリア下部にチップとしてステージングされ、次のメッセージ送信と同時に送られる
+
+5MB超の画像はアップロード前にブラウザ側でCanvasを使ってJPEG 85%品質にリサイズされる。
+
+**自動クリーンアップ:**
+- 起動時: `/tmp/tenshukaku-images/` 内の既存ファイルを全削除
+- 5分おき: 30分以上経過したファイルを削除
+- 上限管理: ディレクトリが50件を超えると古いものから削除
 
 ### 監視タブ
 
@@ -44,18 +70,39 @@
 
 ![履歴タブ](assets/screenshots/tab-history.png)
 
+### 幕府タブ（Bakuhu）
+
+Inter-Bakuhu ネットワークに接続中の peer 一覧をテーブル形式で表示する5番目のタブ。テーブルには各 peer の ID・名称・接続状態・Base URL が一覧される。**更新** ボタンで `GET /bakuhu/peers` を呼び出して peer 情報を最新化できる。
+Inter-Bakuhu を有効にしている場合、ヘッダーには現在ノードが **主幕府 / 従幕府** のどちらで動いているかを示すロールバッジも表示される。
+
+### 設定ページ（設定） — `GET /settings`
+
+ナビゲーションバーの ⚙️ アイコンからアクセス。`settings.yaml` を直接編集せずにランタイムから設定変更が可能:
+
+- **監視ポーリング間隔** — エージェント監視グリッドのベース・最大間隔（ms）
+- **将軍ポーリング間隔** — 将軍ペインWebSocketフィードのベース・最大間隔（ms）
+- **テキストエリア最大行数** — テキストエリアがスクロール可能になるまでの最大行高さ（1〜50）
+- **規定文言** — 指揮タブのドロップダウンに表示するプリセット文言の追加・編集・削除
+
+設定は `PUT /api/settings` 経由で `config/settings.yaml` に原子書き込みされ、起動中のアプリに即時反映される。
+
 ## アーキテクチャ
 
 ```
 ブラウザ (HTTP + WebSocket)
     │
     ├── GET  /              → メインSPA（Jinja2テンプレート + htmx）
+    ├── GET  /settings      → 設定ページ
     ├── POST /api/command   → tmux send-keys で将軍ペインに送信
     ├── POST /api/special-key → 特殊キー送信（許可リスト方式）
     ├── POST /api/monitor/clear → 監視表示クリア（非破壊的）
     ├── GET  /api/dashboard → dashboard.md 読み取り（データコンテナで生markdown返却）
     ├── GET  /api/history   → shogun_to_karo.yaml 読み取り
     ├── GET  /api/ws-config → WebSocket再接続設定
+    ├── GET  /api/settings  → ユーザー設定取得（JSON）
+    ├── PUT  /api/settings  → 設定を原子書き込みで更新
+    ├── POST /api/file-paste → ファイルを /tmp/tenshukaku-images/ に保存してパスをsend-keys
+    ├── POST /api/image-paste → /api/file-paste の後方互換エイリアス
     ├── WS   /ws            → 将軍ペインのリアルタイム出力（デルタ配信）
     └── WS   /ws/monitor    → 全ペインリアルタイム監視（デルタ配信）
     │
@@ -79,6 +126,7 @@ tmuxセッション (shogun / multiagent)
 | WebSocket | FastAPI ネイティブ WebSocket（デルタ差分配信） |
 | Markdownレンダリング | marked.js + github-markdown-css |
 | tmux連携 | libtmux 0.53+ |
+| 端末レンダリング | xterm.js + image addon |
 | スタイリング | カスタムCSS（戦国テーマ） |
 | パッケージ管理 | uv |
 
@@ -140,7 +188,15 @@ shogun:
 
 ui:
   user_input_color: "#4FC3F7"
+  textarea_max_rows: 8
+  template_phrases:
+    - label: "状況確認"
+      text: "状況確認"
+    - label: "家老呼ぶ"
+      text: "家老に確認しろ！"
 ```
+
+`ui.textarea_max_rows` と `ui.template_phrases` は設定ページ（`/settings`）からランタイムで変更することも可能。
 
 ### 起動
 
@@ -172,7 +228,8 @@ multi-agent-shogun-tenshukaku/
 │   └── tmux_bridge.py      # tmuxセッション操作レイヤー
 ├── templates/
 │   ├── base.html            # ベーステンプレート（ヘッダ、フッタ、CDNアセット）
-│   ├── index.html           # メインSPA（4タブ + JS）
+│   ├── index.html           # メインSPA（5タブ + JS）
+│   ├── settings.html        # 設定ページ（ポーリング間隔・規定文言）
 │   └── partials/
 │       ├── history.html     # コマンド履歴パーシャル
 │       ├── output.html      # ペイン出力パーシャル
@@ -183,11 +240,13 @@ multi-agent-shogun-tenshukaku/
 │   └── settings.yaml        # サーバー・bakuhuパス・tmux・監視設定
 ├── tests/
 │   ├── test_api.py                      # APIエンドポイントテスト
+│   ├── test_bakuhu.py                   # Inter-Bakuhu ルート・挙動テスト
 │   ├── test_broadcasters.py             # ブロードキャスターテスト
 │   ├── test_dashboard_markdown.py       # ダッシュボードMarkdownレンダリングテスト（Playwright）
 │   ├── test_dashboard_refresh.py        # ダッシュボード手動更新テスト（Playwright）
 │   ├── test_dashboard_table_dark_theme.py # テーブルダークテーマCSSテスト（Playwright）
 │   ├── test_delta.py                    # デルタ差分計算テスト
+│   ├── test_logging_config.py           # ログ / 監査ログテスト
 │   ├── test_monitor.py                  # 監視WebSocketテスト
 │   ├── test_sanitize.py                 # 入力サニタイズテスト
 │   ├── test_tmux_bridge.py              # TmuxBridgeユニットテスト
@@ -214,6 +273,28 @@ uv run pytest
 |---------|--------|
 | [yaziuma/multi-agent-bakuhu](https://github.com/yaziuma/multi-agent-bakuhu) | 本システム向けに開発 |
 | [yohey-w/multi-agent-shogun](https://github.com/yohey-w/multi-agent-shogun) | 互換あり — settings の `bakuhu.base_path` と `tmux` セッション名を調整すれば利用可能 |
+
+## 🏯 Inter-Bakuhu ネットワーク
+
+複数の幕府インスタンスを複数マシンにまたがって接続し、プライマリ幕府からセカンダリ幕府へタスクを委任できる。
+
+> **詳細ドキュメント**: [docs/inter-bakuhu/setup.md](docs/inter-bakuhu/setup.md)
+
+| 機能 | 説明 |
+|------|------|
+| マルチマシン委任 | プライマリからセカンダリ幕府へタスクを送信 |
+| WebSocket RPC/PubSub | リアルタイム双方向接続 |
+| トークン認証 | peer毎の独立したトークン管理 |
+| 役割強制 | 委任操作はprimaryのみ実行可能 |
+| ファイル転送 | `/bakuhu/files` で幕府間ファイル送信に対応（multipart、最大200MB） |
+| 結果再送 | 委任結果の返却に失敗した場合でもキュー保存して自動再送 |
+
+**クイックセットアップ**: メインマシンの `settings.yaml` に `bakuhu.role: primary`、リモートマシンに `role: secondary` を設定し、Tailscale IPで `peers` を構成する。詳細は [docs/inter-bakuhu/setup.md](docs/inter-bakuhu/setup.md) を参照。
+
+## ログ
+
+- 通常のアプリケーションログは Python `logging` 経由で出力され、プロセスマネージャ側で収集される。
+- Inter-Bakuhu 監査イベントは `logs/inter-bakuhu/YYYY-MM-DD.jsonl` に日次JSONLで保存され、peer操作や委任通信の追跡に使える。
 
 ## 関連プロジェクト
 

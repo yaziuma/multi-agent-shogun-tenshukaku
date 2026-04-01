@@ -75,6 +75,13 @@ Browse the command queue (`shogun_to_karo.yaml`) with expandable details for eac
 
 ![History Tab](assets/screenshots/tab-history.png)
 
+### Bakuhu Tab (幕府)
+
+Displays the **Inter-Bakuhu Network** peer list — secondary shogun instances connected to this node. Shows Peer ID, name, connection status, and Base URL for each registered peer. A **🔄 Refresh** button triggers a manual refresh via `GET /bakuhu/peers` (30-second server-side cache).
+
+This tab is visible only when `config/settings.yaml` contains a `bakuhu` configuration block.
+When Inter-Bakuhu mode is enabled, the header also shows a **role badge** so operators can immediately tell whether the current node is running as a `primary` or `secondary` bakuhu.
+
 ### Settings Page (設定) — `GET /settings`
 
 Accessible via the ⚙️ icon in the navigation bar. Allows runtime configuration without editing `settings.yaml` directly:
@@ -126,6 +133,7 @@ tmux sessions (shogun / multiagent)
 | WebSocket | FastAPI native WebSocket (delta diff delivery) |
 | Markdown Rendering | marked.js + github-markdown-css |
 | tmux Integration | libtmux 0.53+ |
+| Terminal Rendering | xterm.js + image addon |
 | Styling | Custom CSS (Sengoku-era theme) |
 | Package Manager | uv |
 
@@ -242,11 +250,13 @@ multi-agent-shogun-tenshukaku/
 │   └── settings.yaml        # Server, bakuhu path, tmux & monitor configuration
 ├── tests/
 │   ├── test_api.py                      # API endpoint tests
+│   ├── test_bakuhu.py                   # Inter-Bakuhu route and behavior tests
 │   ├── test_broadcasters.py             # Broadcaster unit tests
 │   ├── test_dashboard_markdown.py       # Dashboard markdown rendering tests (Playwright)
 │   ├── test_dashboard_refresh.py        # Dashboard manual refresh tests (Playwright)
 │   ├── test_dashboard_table_dark_theme.py # Table dark theme CSS tests (Playwright)
 │   ├── test_delta.py                    # Delta diff computation tests
+│   ├── test_logging_config.py           # Logging and audit log tests
 │   ├── test_monitor.py                  # Monitor WebSocket tests
 │   ├── test_sanitize.py                 # Input sanitization tests
 │   ├── test_tmux_bridge.py              # TmuxBridge unit tests
@@ -273,6 +283,31 @@ Tenshukaku works with any multi-agent-shogun family system. All session names, p
 |--------|--------------|
 | [yaziuma/multi-agent-bakuhu](https://github.com/yaziuma/multi-agent-bakuhu) | Developed for this system |
 | [yohey-w/multi-agent-shogun](https://github.com/yohey-w/multi-agent-shogun) | Compatible — adjust `bakuhu.base_path` and `tmux` session names in settings |
+
+## 🏯 Inter-Bakuhu Network
+
+Connect multiple Bakuhu instances across machines — delegate tasks from your primary
+Bakuhu to secondary Bakuhu instances over a secure Tailscale VPN.
+
+> **Full documentation**: [docs/inter-bakuhu/setup.md](docs/inter-bakuhu/setup.md)
+
+| Feature | Description |
+|---------|-------------|
+| Multi-machine delegation | Send tasks from primary to secondary Bakuhu |
+| WebSocket RPC/PubSub | Real-time bidirectional connection |
+| Token authentication | Per-peer token isolation |
+| Role enforcement | Only primary can initiate delegation |
+| File transfer | Send files across Bakuhu nodes via `/bakuhu/files` (multipart upload, up to 200 MB) |
+| Durable result retry | Failed delegation result returns are queued and retried automatically |
+
+**Quick setup**: Set `bakuhu.role: primary` on your main machine, `role: secondary`
+on the remote machine, configure `peers` with Tailscale IPs.
+See [docs/inter-bakuhu/setup.md](docs/inter-bakuhu/setup.md) for full setup guide.
+
+## Logging
+
+- General application logs are emitted through Python `logging` and collected by the process manager.
+- Inter-Bakuhu audit events are additionally written to daily JSONL files under `logs/inter-bakuhu/YYYY-MM-DD.jsonl`, making peer operations and delegation traffic easy to inspect later.
 
 ## Related Projects
 
